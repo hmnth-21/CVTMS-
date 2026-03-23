@@ -1,0 +1,9 @@
+- Errant vehicle / incident recording module
+- Entry/exit statistics and reporting module
+- Extended search and movement history reports
+- Additional validation and edge-case hardening
+- UI polish and refactoring
+- Testing suite expansion
+- Final documentation and submission cleanup
+
+Note: These are pending tasks for Week 2 and were intentionally left out of the current Week 1 implementation.
