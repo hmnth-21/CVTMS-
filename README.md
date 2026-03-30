@@ -2,15 +2,19 @@
 
 CVTMS is a Java-based console application designed to manage and monitor vehicular traffic within a university campus environment according to the provided Software Requirements Specification (SRS). This implementation focuses exclusively on Phase 1 (Week 1) core features and uses PostgreSQL as the database backend.
 
-## Key Features (Week 1 Scope)
+## Key Features
 
 - **Authentication System**: Role-based access for ADMIN and SECURITY personnel, using jBCrypt for secure password hashing.
 - **Vehicle & Owner Registration**: Register owners and vehicles, categorized cleanly by type (CAMPUS, CAB, DELIVERY, WORK, EXTERNAL).
 - **Entry & Exit Logging**: Prevent duplicate active entries. 
 - **Overstay Detection**: Flag external/visitor vehicles overstaying limits; log justifications.
-- **Basic Console Navigation**: Seamless text UI explicitly designed around Week 1 requirements (Login, Register, Record Entry/Exit, View Inside, Default Search).
-
-*Note: Incident reporting, statistics modules, and advanced movement reports are intentionally deferred to Week 2. See `PENDING_TASKS.txt`.*
+- **Incident Recording**: Record and view incidents involving vehicles (e.g., speeding, unauthorized parking).
+- **Statistics & Reporting**: Daily entry/exit stats, vehicle type distribution, and overstay summaries.
+- **Extended Search**: Search traffic logs by registration number and date range.
+- **Movement History**: View full movement history for any registered vehicle.
+- **Robust Validation**: Hardened input validation and edge-case handling.
+- **Testing Suite**: Comprehensive unit tests for all core services.
+- **Polished Console UI**: Improved formatting and navigation for a professional experience.
 
 ## Prerequisites
 
