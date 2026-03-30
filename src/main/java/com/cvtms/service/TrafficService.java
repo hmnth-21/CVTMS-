@@ -22,6 +22,11 @@ public class TrafficService {
     }
 
     public boolean recordEntry(String registrationNumber, String gate, String externalPurpose) {
+        if (gate == null || gate.trim().isEmpty()) {
+            System.out.println("Gate name cannot be empty.");
+            return false;
+        }
+
         Vehicle vehicle = vehicleService.getVehicle(registrationNumber);
         if (vehicle == null) {
             System.out.println("Vehicle not found. Please register the vehicle first.");
@@ -90,5 +95,17 @@ public class TrafficService {
     
     public List<EntryLog> viewVehiclesCurrentlyInside() {
         return logDAO.getVehiclesCurrentlyInside();
+    }
+
+    public List<EntryLog> getVehicleMovementHistory(String registrationNumber) {
+        Vehicle vehicle = vehicleService.getVehicle(registrationNumber);
+        if (vehicle == null) {
+            return null;
+        }
+        return logDAO.getMovementHistory(vehicle.getId());
+    }
+
+    public List<EntryLog> searchTrafficLogs(String regNumber, String dateFrom, String dateTo) {
+        return logDAO.searchLogs(regNumber, dateFrom, dateTo);
     }
 }

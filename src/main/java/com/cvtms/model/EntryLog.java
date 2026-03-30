@@ -8,13 +8,19 @@ public class EntryLog {
     private LocalDateTime entryTime;
     private String gate;
     private String externalPurpose;
+    private LocalDateTime exitTime;
 
     public EntryLog(int id, int vehicleId, LocalDateTime entryTime, String gate, String externalPurpose) {
+        this(id, vehicleId, entryTime, gate, externalPurpose, null);
+    }
+
+    public EntryLog(int id, int vehicleId, LocalDateTime entryTime, String gate, String externalPurpose, LocalDateTime exitTime) {
         this.id = id;
         this.vehicleId = vehicleId;
         this.entryTime = entryTime;
         this.gate = gate;
         this.externalPurpose = externalPurpose;
+        this.exitTime = exitTime;
     }
 
     public int getId() { return id; }
@@ -31,4 +37,7 @@ public class EntryLog {
 
     public String getExternalPurpose() { return externalPurpose; }
     public void setExternalPurpose(String externalPurpose) { this.externalPurpose = externalPurpose; }
+
+    public LocalDateTime getExitTime() { return exitTime; }
+    public void setExitTime(LocalDateTime exitTime) { this.exitTime = exitTime; }
 }

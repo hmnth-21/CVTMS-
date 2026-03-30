@@ -61,6 +61,15 @@ public class DatabaseConnectionManager {
                 "FOREIGN KEY(exit_log_id) REFERENCES exit_logs(id)" +
                 ");";
 
+        String createIncidentsTable = "CREATE TABLE IF NOT EXISTS incidents (" +
+                "id SERIAL PRIMARY KEY, " +
+                "vehicle_id INTEGER NOT NULL, " +
+                "description TEXT NOT NULL, " +
+                "timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                "severity VARCHAR(50) NOT NULL, " +
+                "FOREIGN KEY(vehicle_id) REFERENCES vehicles(id)" +
+                ");";
+
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement()) {
             stmt.execute(createUsersTable);
@@ -69,6 +78,7 @@ public class DatabaseConnectionManager {
             stmt.execute(createEntriesTable);
             stmt.execute(createExitsTable);
             stmt.execute(createOverstaysTable);
+            stmt.execute(createIncidentsTable);
             
             // Seed default admin if none exists
             String adminQuery = "SELECT COUNT(*) FROM users";
