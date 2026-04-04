@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campus Vehicular Traffic Management</title>
+    <!-- Google Fonts for modern typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Main Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Toast Notifications -->
+    <div id="toast-container"></div>
+
+    <!-- Login View -->
+    <div id="login-view" class="view-container active">
+        <div class="login-box">
+            <div class="login-header">
+                <div class="logo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                </div>
+                <h2>CVTMS Platform</h2>
+                <p>Campus Vehicular Traffic Management System</p>
+            </div>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" placeholder="admin or security" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" placeholder="Enter password (any)" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Sign In</button>
+            </form>
+            <div class="login-hint">
+                <p><small>Hint: use "admin" for Admin, "security" for Security</small></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard View -->
+    <div id="app-view" class="view-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h3>CVTMS</h3>
+                <span class="role-badge" id="user-role-badge">Admin</span>
+            </div>
+            <nav class="sidebar-nav">
+                <!-- Admin specific nav items (injected via JS or controlled by CSS classes) -->
+                <ul id="admin-nav" class="nav-list" style="display: none;">
+                    <li><a href="#" data-target="admin-dashboard" class="active">Overview & Stats</a></li>
+                    <li><a href="#" data-target="admin-incidents">View All Incidents</a></li>
+                    <li><a href="#" data-target="admin-register">Register Security</a></li>
+                </ul>
+                <!-- Security specific nav items -->
+                <ul id="security-nav" class="nav-list" style="display: none;">
+                    <li><a href="#" data-target="sec-dashboard" class="active">Operations</a></li>
+                    <li><a href="#" data-target="sec-currently-inside">Currently Inside</a></li>
+                    <li><a href="#" data-target="sec-register-vehicle">Register Vehicle</a></li>
+                    <li><a href="#" data-target="sec-movement-history">Movement History</a></li>
+                    <li><a href="#" data-target="sec-record-incident">Record Incident</a></li>
+                    <li><a href="#" data-target="admin-incidents">View Incidents</a></li>
+                    <li><a href="#" data-target="sec-extended-search">Extended Search</a></li>
+                </ul>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <span id="current-username">admin_user</span>
+                </div>
+                <button id="logout-btn" class="btn btn-outline btn-sm">Logout</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="topbar">
+                <h2 id="page-title">Dashboard Overview</h2>
+                <div class="topbar-actions">
+                    <span class="time" id="clock">00:00:00</span>
+                </div>
+            </header>
+            
+            <div class="content-wrapper">
+                
+                <!-- ==============================
+                     ADMIN VIEWS
+                =============================== -->
+                
+                <!-- Admin Overview -->
+                <div id="admin-dashboard" class="page-section hidden">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-title">Total Entries Today</div>
+                            <div class="stat-value text-green">142</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-title">Total Exits Today</div>
+                            <div class="stat-value text-blue">110</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-title">Currently Inside</div>
+                            <div class="stat-value text-amber">32</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-title">Overstay Incidents</div>
+                            <div class="stat-value text-red">3</div>
+                        </div>
+                    </div>
+                    <div class="card mt-4">
+                        <div class="card-header">
+                            <h3>Vehicle Distribution (Currently Inside)</h3>
+                        </div>
+                        <div class="card-body">
+                            <ul class="distribution-list">
+                                <li><span>CAMPUS</span> <span class="badge">12</span></li>
+                                <li><span>CAB</span> <span class="badge">8</span></li>
+                                <li><span>DELIVERY</span> <span class="badge">5</span></li>
+                                <li><span>WORK</span> <span class="badge">4</span></li>
+                                <li><span>EXTERNAL</span> <span class="badge">3</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Admin: View Incidents -->
+                <div id="admin-incidents" class="page-section hidden">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>All System Incidents</h3>
+                        </div>
+                        <div class="card-body">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date/Time</th>
+                                        <th>Vehicle ID</th>
+                                        <th>Severity</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="incidents-tbody">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Admin: Register Security -->
+                <div id="admin-register" class="page-section hidden">
+                    <div class="card max-w-md mx-auto">
+                        <div class="card-header">
+                            <h3>Register Security Personnel</h3>
+                        </div>
+                        <div class="card-body">
+                            <form id="register-security-form">
+                                <div class="form-group">
+                                    <label>New Username</label>
+                                    <input type="text" id="new-sec-user" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>New Password</label>
+                                    <input type="password" id="new-sec-pass" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Register Account</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- ==============================
+                     SECURITY VIEWS
+                =============================== -->
+                
+                <!-- Security Operations Dashboard -->
+                <div id="sec-dashboard" class="page-section hidden">
+                    <div class="quick-actions-grid">
+                        <div class="card action-card">
+                            <h3>Record Entry</h3>
+                            <p>Log a vehicle entering the campus.</p>
+                            <form id="record-entry-form" class="mt-2">
+                                <input type="text" placeholder="Reg Number" required class="mb-2 w-100">
+                                <select class="mb-2 w-100" required>
+                                    <option value="" disabled selected>Select Gate</option>
+                                    <option value="Main Gate">Main Gate</option>
+                                    <option value="West Gate">West Gate</option>
+                                    <option value="East Gate">East Gate</option>
+                                </select>
+                                <input type="text" placeholder="Purpose (if external)" class="mb-2 w-100">
+                                <button type="submit" class="btn btn-primary w-100">Record Entry</button>
+                            </form>
+                        </div>
+                        
+                        <div class="card action-card">
+                            <h3>Record Exit</h3>
+                            <p>Log a vehicle leaving the campus.</p>
+                            <form id="record-exit-form" class="mt-2">
+                                <input type="text" placeholder="Reg Number" required class="mb-2 w-100">
+                                <input type="text" placeholder="Overstay Justification (optional)" class="mb-2 w-100">
+                                <button type="submit" class="btn btn-amber w-100">Record Exit</button>
+                            </form>
+                        </div>
+                        
+                        <div class="card action-card">
+                            <h3>Quick Search</h3>
+                            <p>Find vehicle details rapidly.</p>
+                            <form id="quick-search-form" class="mt-2">
+                                <div class="search-wrap d-flex mb-2">
+                                    <input type="text" placeholder="Reg Number" required style="flex:1; margin-right:8px;">
+                                    <button type="submit" class="btn btn-gray">Search</button>
+                                </div>
+                            </form>
+                            <div id="quick-search-result" class="search-result mt-2" style="display:none;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Security: Currently Inside -->
+                <div id="sec-currently-inside" class="page-section hidden">
+                    <div class="card">
+                        <div class="card-header d-flex justify-between">
+                            <h3>Vehicles Currently Inside</h3>
+                            <button class="btn btn-sm btn-outline">Refresh</button>
+                        </div>
+                        <div class="card-body">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Vehicle ID</th>
+                                        <th>Entry Time</th>
+                                        <th>Gate</th>
+                                        <th>Type</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="currently-inside-tbody">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Security: Register Vehicle -->
+                <div id="sec-register-vehicle" class="page-section hidden">
+                    <div class="card max-w-md mx-auto">
+                        <div class="card-header">
+                            <h3>Register New Vehicle</h3>
+                        </div>
+                        <div class="card-body">
+                            <form id="register-vehicle-form">
+                                <div class="form-group">
+                                    <label>Registration Number *</label>
+                                    <input type="text" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Vehicle Type *</label>
+                                    <select required>
+                                        <option value="CAMPUS">CAMPUS</option>
+                                        <option value="CAB">CAB</option>
+                                        <option value="DELIVERY">DELIVERY</option>
+                                        <option value="WORK">WORK</option>
+                                        <option value="EXTERNAL">EXTERNAL</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Owner Name</label>
+                                    <input type="text">
+                                </div>
+                                <div class="form-group">
+                                    <label>Owner Contact</label>
+                                    <input type="text">
+                                </div>
+                                <button type="submit" class="btn btn-primary">Register Vehicle</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Security: Movement History -->
+                <div id="sec-movement-history" class="page-section hidden">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Vehicle Movement History</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="search-bar mb-4" style="max-width: 400px; display:flex;">
+                                <input type="text" placeholder="Enter Registration Number..." class="w-100" style="margin-right: 8px;">
+                                <button class="btn btn-primary">Lookup</button>
+                            </div>
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Vehicle ID</th>
+                                        <th>Entry Time</th>
+                                        <th>Gate</th>
+                                        <th>Exit Time</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="movement-history-tbody">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Security: Record Incident -->
+                <div id="sec-record-incident" class="page-section hidden">
+                    <div class="card max-w-md mx-auto">
+                        <div class="card-header">
+                            <h3>Record Incident</h3>
+                        </div>
+                        <div class="card-body">
+                            <form id="record-incident-form">
+                                <div class="form-group">
+                                    <label>Registration Number</label>
+                                    <input type="text" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Severity</label>
+                                    <select required>
+                                        <option value="LOW">LOW</option>
+                                        <option value="MEDIUM">MEDIUM</option>
+                                        <option value="HIGH">HIGH</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Description</label>
+                                    <textarea rows="4" required style="width: 100%; border: 1px solid var(--border-color); border-radius: 4px; padding: 8px;"></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-red">Log Incident</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                 <!-- Security: Extended Search -->
+                 <div id="sec-extended-search" class="page-section hidden">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <form id="extended-search-form" class="layout-grid">
+                                <div>
+                                    <label class="d-block mb-1">Registration (optional)</label>
+                                    <input type="text" class="w-100">
+                                </div>
+                                <div>
+                                    <label class="d-block mb-1">Date From</label>
+                                    <input type="datetime-local" class="w-100">
+                                </div>
+                                <div>
+                                    <label class="d-block mb-1">Date To</label>
+                                    <input type="datetime-local" class="w-100">
+                                </div>
+                                <div style="display:flex; align-items:flex-end;">
+                                    <button type="submit" class="btn btn-primary w-100">Search Logs</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Entry Time</th>
+                                    <th>Vehicle ID</th>
+                                    <th>Gate</th>
+                                    <th>Exit Time</th>
+                                </tr>
+                            </thead>
+                            <tbody id="extended-search-tbody">
+                                <!-- Results go here -->
+                                <tr><td colspan="4" class="text-center">No logs showing. Run a search.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Application Logic -->
+    <script src="app.js"></script>
+</body>
+</html>
