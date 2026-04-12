@@ -1,124 +1,202 @@
-# Campus Vehicular Traffic Management System (CVTMS) - Week 1 Core
+# Campus Vehicular Traffic Management System (CVTMS)
 
-CVTMS is a Java-based console application designed to manage and monitor vehicular traffic within a university campus environment according to the provided Software Requirements Specification (SRS). This implementation focuses exclusively on Phase 1 (Week 1) core features and uses PostgreSQL as the database backend.
+CVTMS is a Java and PostgreSQL based system for managing campus vehicle operations. The project includes a backend API, a browser-based frontend, and a console entry point. It supports day-to-day gate operations, incident handling, reporting, and admin user management.
 
-## Key Features
+## Overview
 
-- **Authentication System**: Role-based access for ADMIN and SECURITY personnel, using jBCrypt for secure password hashing.
-- **Vehicle & Owner Registration**: Register owners and vehicles, categorized cleanly by type (CAMPUS, CAB, DELIVERY, WORK, EXTERNAL).
-- **Entry & Exit Logging**: Prevent duplicate active entries.
-- **Overstay Detection**: Flag external/visitor vehicles overstaying limits; log justifications.
-- **Incident Recording**: Record and view incidents involving vehicles (e.g., speeding, unauthorized parking).
-- **Statistics & Reporting**: Daily entry/exit stats, vehicle type distribution, and overstay summaries.
-- **Extended Search**: Search traffic logs by registration number and date range.
-- **Movement History**: View full movement history for any registered vehicle.
-- **Robust Validation**: Hardened input validation and edge-case handling.
-- **Testing Suite**: Comprehensive unit tests for all core services.
-- **Polished Console UI**: Improved formatting and navigation for a professional experience.
+The system is designed around a clear layered architecture:
+
+- API layer: HTTP endpoints for frontend integration
+- Service layer: business workflows and validations
+- DAO layer: SQL data access through JDBC
+- Database layer: PostgreSQL persistence
+- Frontend layer: role-based operational interface
+
+The project currently provides practical support for:
+
+- Authentication for ADMIN and SECURITY roles
+- Vehicle registration and owner mapping
+- Entry and exit recording with active-entry safeguards
+- Vehicle movement history and extended traffic log search
+- Incident recording and incident listing
+- Dashboard metrics and distribution reporting
+- Admin user listing and admin-controlled user deletion
+- Overstay tracking and overstay list reporting
+
+## Technology Stack
+
+- Java (JDK 8+)
+- Maven
+- PostgreSQL
+- JDBC
+- jBCrypt
+- Static frontend (HTML, CSS, JavaScript)
+- Node.js `serve` for local frontend hosting
 
 ## Prerequisites
 
-- Java Development Kit (JDK) 8 or higher
-- **Maven** (to manage dependencies like PostgreSQL JDBC and jBCrypt)
-- Node.js + npm (for serving the frontend)
-- **PostgreSQL** Database installed locally and running on port `5432`.
+Before running the system, ensure the following are installed:
 
-## Installation and Configuration
+- JDK 8 or above
+- Maven
+- PostgreSQL (running on `localhost:5432`)
+- Node.js and npm
 
-1. **Database Setup**
-   Ensure your local PostgreSQL server is running.
-   Create a database called `cvtms`:
+## Database Setup
 
-   ```sql
-   CREATE DATABASE cvtms;
-   ```
+1. Create the database:
 
-   > Note: In `src/main/java/com/cvtms/dao/DatabaseConnectionManager.java`, the default postgres connection expects username `postgres` and password `admin`. Update these strings if your local postgres credentials differ.
+```sql
+CREATE DATABASE cvtms;
+```
 
-2. **Start Backend API (single command)**
-   From the project root on Windows:
+2. Confirm database credentials in [src/main/java/com/cvtms/dao/DatabaseConnectionManager.java](src/main/java/com/cvtms/dao/DatabaseConnectionManager.java).
 
-   ```powershell
-   npm run backend
-   ```
+Default values in the project are:
 
-   This command now does all of the following for you:
-   - Cleans and compiles backend classes from `src/main/java` into `bin`
-   - Starts the API server (`com.cvtms.api.ApiServer`) on `http://localhost:8080`
+- user: `postgres`
+- password: `admin`
+- database: `cvtms`
 
-3. **Start Frontend**
-   In a separate terminal:
+The application initializes tables automatically at startup and seeds a default admin account if no users exist.
 
-   ```powershell
-   npm run dev
-   ```
+## Running the Project
 
-   Frontend runs on `http://localhost:3000`.
+Use two terminals from the project root.
 
-4. **Optional: Run Console App Instead of API**
-   ```powershell
-   npm run backend:console
-   ```
+1. Start backend API:
 
-## Helpful Commands
+```powershell
+npm run backend
+```
 
-- Build backend only:
+2. Start frontend:
 
-  ```powershell
-  .\build.bat
-  ```
+```powershell
+npm run dev
+```
 
-- Run API backend directly (after build):
+3. Open frontend:
 
-  ```powershell
-  .\run.bat api
-  ```
+- `http://localhost:3000`
 
-- Run console backend directly (after build):
+### Optional Console Mode
 
-  ```powershell
-  .\run.bat
-  ```
+To run the console application instead of API mode:
 
-- Run tests:
-  ```powershell
-  mvn test
-  ```
+```powershell
+npm run backend:console
+```
 
-## API Health Check
+## Default Login
 
-To verify backend is up:
+If no user exists, the system seeds:
+
+- username: `admin`
+- password: `admin`
+- role: `ADMIN`
+
+## Main API Endpoints
+
+Authentication and users:
+
+- `POST /api/login`
+- `POST /api/register`
+- `GET /api/users`
+- `DELETE /api/user`
+
+Vehicles and traffic:
+
+- `GET /api/vehicles/inside`
+- `POST /api/vehicle/register`
+- `POST /api/entry`
+- `POST /api/exit`
+- `GET /api/vehicle/search`
+- `GET /api/vehicle/movement`
+- `GET /api/logs/search`
+
+Incidents and reporting:
+
+- `GET /api/incidents`
+- `POST /api/incidents`
+- `GET /api/dashboard/summary`
+- `GET /api/overstays`
+
+## Admin Features Available in Frontend
+
+- Dashboard statistics and distribution
+- Vehicles currently inside (dedicated admin view)
+- Overstay list
+- Full incident list
+- Full user list
+- Register security users
+- Delete security users (admin credential confirmation required)
+
+## Build and Test Commands
+
+Build backend classes:
+
+```powershell
+.\build.bat
+```
+
+Run API directly:
+
+```powershell
+.\run.bat api
+```
+
+Run console directly:
+
+```powershell
+.\run.bat
+```
+
+Run tests:
+
+```powershell
+mvn test
+```
+
+## Health Check
+
+Verify that API is running:
 
 ```powershell
 Invoke-WebRequest -UseBasicParsing "http://localhost:8080/api/dashboard/summary" | Select-Object -ExpandProperty StatusCode
 ```
 
-Expected output: `200`
+Expected result: `200`
 
 ## Troubleshooting
 
-- **Address already in use: bind (8080)**
-  Another process is already using port 8080. Stop that process and rerun backend.
+### Port 8080 already in use
 
-  ```powershell
-  netstat -ano | findstr :8080
-  Stop-Process -Id <PID> -Force
-  npm run backend
-  ```
+Find the process and stop it, then restart backend:
 
-- **Dozens of JUnit errors while building backend**
-  Use the updated `build.bat` / `npm run backend`. It compiles only `src/main/java` and excludes test sources.
+```powershell
+netstat -ano | findstr :8080
+Stop-Process -Id <PID> -Force
+npm run backend
+```
 
-## Default Credentials
+### Backend compile fails with test-related errors
 
-The schema initialization code will automatically seed a default Admin account on first run:
+Use [build.bat](build.bat) or `npm run backend`, which compile main sources for runtime startup.
 
-- **Username**: `admin`
-- **Password**: `admin`
+### Frontend shows stale behavior after changes
 
-## Design Constraints Fulfilled
+Perform a hard refresh in the browser (Ctrl+F5) to reload updated JavaScript.
 
-- ✅ No Javascript, Python, PHP, or GUI frameworks. Console-based pure Java.
-- ✅ Structured Maven application.
-- ✅ Uses PostgreSQL backend exclusively via standard JDBC interface.
-- ✅ Deferred everything strictly defined for Week 2 into a plaintext tracking file.
+## Repository Structure
+
+- Backend source: [src/main/java](src/main/java)
+- Backend tests: [src/test/java](src/test/java)
+- Frontend: [frontend](frontend)
+- Build scripts: [build.bat](build.bat), [run.bat](run.bat)
+- Maven config: [pom.xml](pom.xml)
+- npm scripts: [package.json](package.json)
+
+## Notes
+
+This project uses real backend and database data for all operational and admin views. No hardcoded demo records are required for core workflows.
