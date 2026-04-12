@@ -1,16 +1,17 @@
 package com.cvtms.dao;
 
-import com.cvtms.model.EntryLog;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDateTime;
-
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
+import com.cvtms.model.EntryLog;
 
 public class LogDAO {
 
@@ -206,5 +207,34 @@ public class LogDAO {
             e.printStackTrace();
         }
         return results;
+    }
+
+    public List<Map<String, Object>> getOverstayRecords() {
+        List<Map<String, Object>> records = new ArrayList<>();
+        String query = "SELECT v.registration_number, "
+                     + "EXTRACT(EPOCH FROM (ex.exit_time - el.entry_time)) / 3600.0 AS duration_hours, "
+                     + "o.justification "
+                     + "FROM overstays o "
+                     + "JOIN exit_logs ex ON o.exit_log_id = ex.id "
+                     + "JOIN entry_logs el ON ex.entry_log_id = el.id "
+                     + "JOIN vehicles v ON el.vehicle_id = v.id "
+                     + "ORDER BY ex.exit_time DESC";
+
+        try (Connection conn = DatabaseConnectionManager.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+
+            while (rs.next()) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("regNumber", rs.getString("registration_number"));
+                row.put("durationHours", rs.getDouble("duration_hours"));
+                row.put("justification", rs.getString("justification"));
+                records.add(row);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return records;
     }
 }

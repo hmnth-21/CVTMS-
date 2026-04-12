@@ -6,7 +6,13 @@ let state = {
     currentlyInside: [],
     movementHistory: [],
     incidents: [],
-    users: []
+    users: [],
+    overstays: []
+};
+
+let currentSessionUser = {
+    username: '',
+    role: ''
 };
 
 // DOM Elements
@@ -81,6 +87,20 @@ function renderTables() {
         `).join('');
     }
 
+    // 2b. Admin Currently Inside Table
+    const adminInsideTbody = document.getElementById('admin-currently-inside-tbody');
+    if (adminInsideTbody) {
+        adminInsideTbody.innerHTML = state.currentlyInside.length === 0
+            ? `<tr><td colspan="3">No vehicles inside.</td></tr>`
+            : state.currentlyInside.map(v => `
+                <tr>
+                    <td>${v.regNumber}</td>
+                    <td>${v.entryTime}</td>
+                    <td>${v.gate}</td>
+                </tr>
+            `).join('');
+    }
+
     // 3. Movement History Table
     const historyTbody = document.getElementById('movement-history-tbody');
     if (historyTbody) {
@@ -100,11 +120,28 @@ function renderTables() {
     const usersTbody = document.getElementById('users-tbody');
     if (usersTbody) {
         usersTbody.innerHTML = state.users.length === 0
-            ? `<tr><td colspan="2">No users found.</td></tr>`
+            ? `<tr><td colspan="3">No users found.</td></tr>`
             : state.users.map(user => `
                 <tr>
                     <td>${user.username}</td>
                     <td><span class="tag tag-${user.role === 'ADMIN' ? 'blue' : 'gray'}">${user.role}</span></td>
+                    <td>
+                        ${user.role === 'ADMIN' ? '-' : `<button class="btn btn-sm btn-red delete-user-btn" data-username="${user.username}">Delete</button>`}
+                    </td>
+                </tr>
+            `).join('');
+    }
+
+    // 5. Overstay Table
+    const overstaysTbody = document.getElementById('overstays-tbody');
+    if (overstaysTbody) {
+        overstaysTbody.innerHTML = state.overstays.length === 0
+            ? `<tr><td colspan="3">No overstays found.</td></tr>`
+            : state.overstays.map(item => `
+                <tr>
+                    <td>${item.regNumber}</td>
+                    <td>${item.durationHours}</td>
+                    <td>${item.justification || '-'}</td>
                 </tr>
             `).join('');
     }
@@ -136,6 +173,10 @@ function switchView(targetSectionId, title) {
     } else if (targetSectionId === 'admin-dashboard') {
         loadVehiclesInside();
         loadDashboardSummary();
+    } else if (targetSectionId === 'admin-currently-inside') {
+        loadVehiclesInside();
+    } else if (targetSectionId === 'admin-overstays') {
+        loadOverstays();
     } else if (targetSectionId === 'admin-incidents') {
         loadIncidents();
     } else if (targetSectionId === 'admin-users') {
@@ -224,6 +265,20 @@ async function loadUsers() {
     }
 }
 
+/** Fetch overstays list from API and update admin overstay table. */
+async function loadOverstays() {
+    try {
+        const response = await fetch(`${API_BASE}/overstays`);
+        const result = await response.json();
+        if (result.success) {
+            state.overstays = Array.isArray(result.data) ? result.data : [];
+            renderTables();
+        }
+    } catch (err) {
+        console.error('Failed to load overstays:', err);
+    }
+}
+
 // Initial render
 renderTables();
 
@@ -260,6 +315,7 @@ loginForm.addEventListener('submit', async (e) => {
             appView.classList.add('active');
             currentUsernameSpan.textContent = data.username;
             userRoleBadge.textContent = data.role;
+            currentSessionUser = { username: data.username, role: data.role };
 
             if (data.role === 'ADMIN') {
                 adminNav.style.display = 'block';
@@ -283,6 +339,7 @@ logoutBtn.addEventListener('click', () => {
     appView.classList.remove('active');
     loginView.classList.add('active');
     loginForm.reset();
+    currentSessionUser = { username: '', role: '' };
     showToast('Logged out successfully.');
 });
 
@@ -549,5 +606,66 @@ const refreshUsersBtn = document.getElementById('refresh-users-btn');
 if (refreshUsersBtn) {
     refreshUsersBtn.addEventListener('click', () => {
         loadUsers();
+    });
+}
+
+const refreshAdminInsideBtn = document.getElementById('refresh-admin-inside-btn');
+if (refreshAdminInsideBtn) {
+    refreshAdminInsideBtn.addEventListener('click', () => {
+        loadVehiclesInside();
+    });
+}
+
+const refreshOverstaysBtn = document.getElementById('refresh-overstays-btn');
+if (refreshOverstaysBtn) {
+    refreshOverstaysBtn.addEventListener('click', () => {
+        loadOverstays();
+    });
+}
+
+const usersTbodyEl = document.getElementById('users-tbody');
+if (usersTbodyEl) {
+    usersTbodyEl.addEventListener('click', async (event) => {
+        const deleteBtn = event.target.closest('.delete-user-btn');
+        if (!deleteBtn) return;
+
+        if (currentSessionUser.role !== 'ADMIN') {
+            showToast('Only admin can delete users.', 'error');
+            return;
+        }
+
+        const targetUsername = deleteBtn.getAttribute('data-username');
+        if (!targetUsername) return;
+
+        const confirmed = window.confirm(`Delete user ${targetUsername}?`);
+        if (!confirmed) return;
+
+        const adminPassword = window.prompt('Enter admin password to confirm deletion:');
+        if (!adminPassword || !adminPassword.trim()) {
+            showToast('Admin password is required.', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE}/user`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    adminUsername: currentSessionUser.username,
+                    adminPassword: adminPassword.trim(),
+                    username: targetUsername
+                })
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(result.message || 'User deleted.');
+                loadUsers();
+            } else {
+                showToast(result.message || 'Failed to delete user.', 'error');
+            }
+        } catch (err) {
+            showToast('Cannot connect to server.', 'error');
+        }
     });
 }

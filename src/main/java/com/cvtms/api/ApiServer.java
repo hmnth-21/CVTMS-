@@ -74,6 +74,8 @@ public class ApiServer {
         server.createContext("/api/logs/search", new SearchLogsHandler());
         server.createContext("/api/dashboard/summary", new DashboardSummaryHandler());
         server.createContext("/api/users", new UsersHandler());
+        server.createContext("/api/overstays", new OverstaysHandler());
+        server.createContext("/api/user", new DeleteUserHandler());
 
         server.setExecutor(null); // default executor
     }
@@ -97,7 +99,7 @@ public class ApiServer {
     private static void addCorsHeaders(HttpExchange exchange) {
         Headers headers = exchange.getResponseHeaders();
         headers.add("Access-Control-Allow-Origin", "*");
-        headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        headers.add("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
         headers.add("Access-Control-Allow-Headers", "Content-Type");
     }
 
@@ -364,6 +366,106 @@ public class ApiServer {
 
             String json = "{\"success\":true,\"count\":" + users.size() + ",\"data\":" + data.toString() + "}";
             sendJson(exchange, 200, json);
+        }
+    }
+
+    /**
+     * GET /api/overstays
+     * Returns overstay list with registration number, duration, and justification.
+     */
+    class OverstaysHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (handlePreflight(exchange)) return;
+
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 405, "{\"success\":false,\"message\":\"Method not allowed\"}");
+                return;
+            }
+
+            List<Map<String, Object>> overstays = logDAO.getOverstayRecords();
+            StringBuilder data = new StringBuilder("[");
+
+            for (int i = 0; i < overstays.size(); i++) {
+                Map<String, Object> row = overstays.get(i);
+                if (i > 0) data.append(",");
+
+                String regNumber = row.get("regNumber") != null ? String.valueOf(row.get("regNumber")) : "";
+                double durationHours = row.get("durationHours") instanceof Number
+                    ? ((Number) row.get("durationHours")).doubleValue()
+                    : 0.0;
+                double roundedDurationHours = Math.round(durationHours * 100.0) / 100.0;
+                String justification = row.get("justification") != null ? String.valueOf(row.get("justification")) : "";
+
+                data.append("{")
+                    .append("\"regNumber\":\"").append(esc(regNumber)).append("\",")
+                    .append("\"durationHours\":").append(roundedDurationHours).append(",")
+                    .append("\"justification\":\"").append(esc(justification)).append("\"")
+                    .append("}");
+            }
+            data.append("]");
+
+            String json = "{\"success\":true,\"count\":" + overstays.size() + ",\"data\":" + data.toString() + "}";
+            sendJson(exchange, 200, json);
+        }
+    }
+
+    /**
+     * DELETE /api/user
+     * Body: {"adminUsername":"...", "adminPassword":"...", "username":"..."}
+     * Restricts deletion to authenticated ADMIN users.
+     */
+    class DeleteUserHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (handlePreflight(exchange)) return;
+
+            if (!"DELETE".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 405, "{\"success\":false,\"message\":\"Method not allowed\"}");
+                return;
+            }
+
+            String body = readBody(exchange);
+            String adminUsername = jsonValue(body, "adminUsername");
+            String adminPassword = jsonValue(body, "adminPassword");
+            String username = jsonValue(body, "username");
+
+            if (adminUsername == null || adminPassword == null || username == null
+                || adminUsername.trim().isEmpty() || adminPassword.trim().isEmpty() || username.trim().isEmpty()) {
+                sendJson(exchange, 400, "{\"success\":false,\"message\":\"adminUsername, adminPassword, and username are required\"}");
+                return;
+            }
+
+            AuthService auth = new AuthService();
+            boolean loggedIn = auth.login(adminUsername.trim(), adminPassword.trim());
+            if (!loggedIn || auth.getCurrentUser() == null) {
+                sendJson(exchange, 401, "{\"success\":false,\"message\":\"Invalid admin credentials\"}");
+                return;
+            }
+
+            User actor = auth.getCurrentUser();
+            if (actor.getRole() != Role.ADMIN) {
+                sendJson(exchange, 403, "{\"success\":false,\"message\":\"Only ADMIN users can delete accounts\"}");
+                return;
+            }
+
+            String normalizedTarget = username.trim().toLowerCase();
+            if ("admin".equals(normalizedTarget)) {
+                sendJson(exchange, 400, "{\"success\":false,\"message\":\"Default admin account cannot be deleted\"}");
+                return;
+            }
+
+            if (normalizedTarget.equals(actor.getUsername())) {
+                sendJson(exchange, 400, "{\"success\":false,\"message\":\"Admin cannot delete their own active account\"}");
+                return;
+            }
+
+            boolean deleted = userDAO.deleteUserByUsername(normalizedTarget);
+            if (deleted) {
+                sendJson(exchange, 200, "{\"success\":true,\"message\":\"User deleted successfully\"}");
+            } else {
+                sendJson(exchange, 404, "{\"success\":false,\"message\":\"User not found\"}");
+            }
         }
     }
 

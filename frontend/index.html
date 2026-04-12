@@ -54,6 +54,8 @@
                 <!-- Admin specific nav items (injected via JS or controlled by CSS classes) -->
                 <ul id="admin-nav" class="nav-list" style="display: none;">
                     <li><a href="#" data-target="admin-dashboard" class="active">Overview & Stats</a></li>
+                    <li><a href="#" data-target="admin-currently-inside">Vehicles Currently Inside</a></li>
+                    <li><a href="#" data-target="admin-overstays">Overstay List</a></li>
                     <li><a href="#" data-target="admin-incidents">View All Incidents</a></li>
                     <li><a href="#" data-target="admin-users">View All Users</a></li>
                     <li><a href="#" data-target="admin-register">Register Security</a></li>
@@ -128,6 +130,54 @@
                     </div>
                 </div>
 
+                <!-- Admin: Vehicles Currently Inside -->
+                <div id="admin-currently-inside" class="page-section hidden">
+                    <div class="card">
+                        <div class="card-header d-flex justify-between">
+                            <h3>Vehicles Currently Inside</h3>
+                            <button class="btn btn-sm btn-outline" id="refresh-admin-inside-btn">Refresh</button>
+                        </div>
+                        <div class="card-body">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Registration Number</th>
+                                        <th>Entry Time</th>
+                                        <th>Gate</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-currently-inside-tbody">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Admin: Overstay List -->
+                <div id="admin-overstays" class="page-section hidden">
+                    <div class="card">
+                        <div class="card-header d-flex justify-between">
+                            <h3>Overstay List</h3>
+                            <button class="btn btn-sm btn-outline" id="refresh-overstays-btn">Refresh</button>
+                        </div>
+                        <div class="card-body">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Vehicle Number</th>
+                                        <th>Duration (hours)</th>
+                                        <th>Justification</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="overstays-tbody">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Admin: View Incidents -->
                 <div id="admin-incidents" class="page-section hidden">
                     <div class="card">
@@ -187,6 +237,7 @@
                                     <tr>
                                         <th>Username</th>
                                         <th>Role</th>
+                                        <th>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody id="users-tbody">
