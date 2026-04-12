@@ -6,12 +6,20 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import com.cvtms.dao.DatabaseConnectionManager;
+import com.cvtms.dao.LogDAO;
+import com.cvtms.dao.UserDAO;
 import com.cvtms.dao.VehicleDAO;
 import com.cvtms.model.EntryLog;
+import com.cvtms.model.Incident;
 import com.cvtms.model.Role;
 import com.cvtms.model.User;
 import com.cvtms.model.Vehicle;
@@ -39,6 +47,8 @@ public class ApiServer {
     private IncidentService incidentService;
     private ReportingService reportingService;
     private VehicleDAO vehicleDAO;
+    private LogDAO logDAO;
+    private UserDAO userDAO;
 
     public ApiServer(int port) throws IOException {
         this.vehicleService = new VehicleService();
@@ -46,6 +56,8 @@ public class ApiServer {
         this.incidentService = new IncidentService();
         this.reportingService = new ReportingService();
         this.vehicleDAO = new VehicleDAO();
+        this.logDAO = new LogDAO();
+        this.userDAO = new UserDAO();
 
         server = HttpServer.create(new InetSocketAddress(port), 0);
 
@@ -56,6 +68,12 @@ public class ApiServer {
         server.createContext("/api/entry", new EntryHandler());
         server.createContext("/api/exit", new ExitHandler());
         server.createContext("/api/vehicle/register", new VehicleRegisterHandler());
+        server.createContext("/api/incidents", new IncidentsHandler());
+        server.createContext("/api/vehicle/search", new VehicleSearchHandler());
+        server.createContext("/api/vehicle/movement", new VehicleMovementHandler());
+        server.createContext("/api/logs/search", new SearchLogsHandler());
+        server.createContext("/api/dashboard/summary", new DashboardSummaryHandler());
+        server.createContext("/api/users", new UsersHandler());
 
         server.setExecutor(null); // default executor
     }
@@ -63,6 +81,12 @@ public class ApiServer {
     public void start() {
         server.start();
         System.out.println("[API] Server running on http://localhost:" + server.getAddress().getPort());
+    }
+
+    public static void main(String[] args) throws IOException {
+        DatabaseConnectionManager.initializeDatabase();
+        ApiServer apiServer = new ApiServer(8080);
+        apiServer.start();
     }
 
     // =========================================================================
@@ -150,6 +174,40 @@ public class ApiServer {
     static String esc(String value) {
         if (value == null) return "";
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    /** Decode query parameters from the request URI. */
+    static Map<String, String> queryParams(HttpExchange exchange) {
+        Map<String, String> params = new HashMap<>();
+        String rawQuery = exchange.getRequestURI().getRawQuery();
+        if (rawQuery == null || rawQuery.trim().isEmpty()) {
+            return params;
+        }
+
+        String[] pairs = rawQuery.split("&");
+        for (String pair : pairs) {
+            if (pair == null || pair.isEmpty()) continue;
+
+            String[] kv = pair.split("=", 2);
+            String key = decodeUrl(kv[0]);
+            String value = kv.length > 1 ? decodeUrl(kv[1]) : "";
+            params.put(key, value);
+        }
+        return params;
+    }
+
+    private static String decodeUrl(String value) {
+        if (value == null) return "";
+        try {
+            return URLDecoder.decode(value, "UTF-8");
+        } catch (Exception e) {
+            return value;
+        }
+    }
+
+    private static String formatTimestamp(Timestamp timestamp) {
+        if (timestamp == null) return "";
+        return timestamp.toLocalDateTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
     }
 
     // =========================================================================
@@ -278,6 +336,38 @@ public class ApiServer {
     }
 
     /**
+     * GET /api/users
+     * Returns only username and role for admin visibility.
+     */
+    class UsersHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (handlePreflight(exchange)) return;
+
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 405, "{\"success\":false,\"message\":\"Method not allowed\"}");
+                return;
+            }
+
+            List<User> users = userDAO.getAllUsers();
+            StringBuilder data = new StringBuilder("[");
+
+            for (int i = 0; i < users.size(); i++) {
+                User user = users.get(i);
+                if (i > 0) data.append(",");
+                data.append("{")
+                    .append("\"username\":\"").append(esc(user.getUsername())).append("\",")
+                    .append("\"role\":\"").append(user.getRole().name()).append("\"")
+                    .append("}");
+            }
+            data.append("]");
+
+            String json = "{\"success\":true,\"count\":" + users.size() + ",\"data\":" + data.toString() + "}";
+            sendJson(exchange, 200, json);
+        }
+    }
+
+    /**
      * POST /api/entry
      * Body: {"regNumber": "...", "gate": "...", "purpose": "..."}
      */
@@ -301,12 +391,31 @@ public class ApiServer {
                 return;
             }
 
-            boolean success = trafficService.recordEntry(regNumber.trim().toUpperCase(), gate.trim(), purpose != null ? purpose.trim() : "");
+            String normalizedReg = regNumber.trim().toUpperCase();
+
+            Vehicle vehicle = vehicleService.getVehicle(normalizedReg);
+            if (vehicle == null) {
+                sendJson(exchange, 404, "{\"success\":false,\"message\":\"Entry failed. Vehicle is not registered. Please register it first.\"}");
+                return;
+            }
+
+            EntryLog activeLog = logDAO.findActiveEntryLogForVehicle(vehicle.getId());
+            if (activeLog != null) {
+                String activeEntryTime = activeLog.getEntryTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+                String activeGate = activeLog.getGate() != null ? activeLog.getGate() : "Unknown Gate";
+                sendJson(exchange, 409,
+                    "{\"success\":false,\"message\":\"Entry failed. Vehicle is already inside (entered at "
+                    + activeEntryTime + " via " + esc(activeGate)
+                    + "). Record exit first.\"}");
+                return;
+            }
+
+            boolean success = trafficService.recordEntry(normalizedReg, gate.trim(), purpose != null ? purpose.trim() : "");
             
             if (success) {
                 sendJson(exchange, 200, "{\"success\":true,\"message\":\"Vehicle entry recorded.\"}");
             } else {
-                sendJson(exchange, 400, "{\"success\":false,\"message\":\"Entry failed. Vehicle may not exist or is already inside.\"}");
+                sendJson(exchange, 400, "{\"success\":false,\"message\":\"Entry failed due to an unexpected validation/database issue.\"}");
             }
         }
     }
@@ -348,6 +457,287 @@ public class ApiServer {
     }
 
     /**
+     * GET /api/incidents
+     * POST /api/incidents
+     */
+    class IncidentsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (handlePreflight(exchange)) return;
+
+            String method = exchange.getRequestMethod();
+            if ("GET".equalsIgnoreCase(method)) {
+                List<Incident> incidents = incidentService.getAllIncidents();
+                StringBuilder data = new StringBuilder("[");
+
+                for (int i = 0; i < incidents.size(); i++) {
+                    Incident incident = incidents.get(i);
+                    Vehicle vehicle = vehicleDAO.findVehicleById(incident.getVehicleId());
+                    String regNumber = (vehicle != null) ? vehicle.getRegistrationNumber() : "ID-" + incident.getVehicleId();
+
+                    if (i > 0) data.append(",");
+                    data.append("{")
+                        .append("\"date\":\"").append(esc(formatTimestamp(incident.getTimestamp()))).append("\",")
+                        .append("\"id\":\"").append(esc(regNumber)).append("\",")
+                        .append("\"severity\":\"").append(esc(incident.getSeverity())).append("\",")
+                        .append("\"desc\":\"").append(esc(incident.getDescription())).append("\"")
+                        .append("}");
+                }
+                data.append("]");
+
+                String json = "{\"success\":true,\"count\":" + incidents.size() + ",\"data\":" + data.toString() + "}";
+                sendJson(exchange, 200, json);
+                return;
+            }
+
+            if ("POST".equalsIgnoreCase(method)) {
+                String body = readBody(exchange);
+                String regNumber = jsonValue(body, "regNumber");
+                String severity = jsonValue(body, "severity");
+                String description = jsonValue(body, "description");
+
+                if (regNumber == null || regNumber.trim().isEmpty()
+                    || severity == null || severity.trim().isEmpty()
+                    || description == null || description.trim().isEmpty()) {
+                    sendJson(exchange, 400, "{\"success\":false,\"message\":\"Registration number, severity, and description are required\"}");
+                    return;
+                }
+
+                boolean success = incidentService.recordIncident(
+                    regNumber.trim().toUpperCase(),
+                    description.trim(),
+                    severity.trim().toUpperCase()
+                );
+
+                if (success) {
+                    sendJson(exchange, 200, "{\"success\":true,\"message\":\"Incident recorded successfully\"}");
+                } else {
+                    sendJson(exchange, 400, "{\"success\":false,\"message\":\"Failed to record incident. Vehicle may not be registered.\"}");
+                }
+                return;
+            }
+
+            sendJson(exchange, 405, "{\"success\":false,\"message\":\"Method not allowed\"}");
+        }
+    }
+
+    /**
+     * GET /api/vehicle/search?regNumber=...
+     */
+    class VehicleSearchHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (handlePreflight(exchange)) return;
+
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 405, "{\"success\":false,\"message\":\"Method not allowed\"}");
+                return;
+            }
+
+            Map<String, String> params = queryParams(exchange);
+            String regNumber = params.get("regNumber");
+
+            if (regNumber == null || regNumber.trim().isEmpty()) {
+                sendJson(exchange, 400, "{\"success\":false,\"message\":\"regNumber query parameter is required\"}");
+                return;
+            }
+
+            String normalizedReg = regNumber.trim().toUpperCase();
+            Vehicle vehicle = vehicleService.getVehicle(normalizedReg);
+            if (vehicle == null) {
+                sendJson(exchange, 404, "{\"success\":false,\"message\":\"Vehicle not found\"}");
+                return;
+            }
+
+            EntryLog activeInsideLog = null;
+            List<EntryLog> inside = trafficService.viewVehiclesCurrentlyInside();
+            for (EntryLog log : inside) {
+                if (log.getVehicleId() == vehicle.getId()) {
+                    activeInsideLog = log;
+                    break;
+                }
+            }
+
+            if (activeInsideLog != null) {
+                String json = "{\"success\":true,"
+                    + "\"regNumber\":\"" + esc(vehicle.getRegistrationNumber()) + "\"," 
+                    + "\"type\":\"" + vehicle.getType().name() + "\"," 
+                    + "\"status\":\"INSIDE\"," 
+                    + "\"entryTime\":\"" + activeInsideLog.getEntryTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) + "\"," 
+                    + "\"gate\":\"" + esc(activeInsideLog.getGate()) + "\"}";
+                sendJson(exchange, 200, json);
+                return;
+            }
+
+            List<EntryLog> history = trafficService.getVehicleMovementHistory(normalizedReg);
+            EntryLog latest = (history != null && !history.isEmpty()) ? history.get(0) : null;
+            String status = (latest == null || latest.getExitTime() != null) ? "LEFT" : "INSIDE";
+            String lastEntry = latest != null
+                ? latest.getEntryTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+                : "";
+            String lastExit = (latest != null && latest.getExitTime() != null)
+                ? latest.getExitTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+                : "";
+
+            String json = "{\"success\":true,"
+                + "\"regNumber\":\"" + esc(vehicle.getRegistrationNumber()) + "\"," 
+                + "\"type\":\"" + vehicle.getType().name() + "\"," 
+                + "\"status\":\"" + status + "\"," 
+                + "\"entryTime\":\"" + lastEntry + "\"," 
+                + "\"exitTime\":\"" + lastExit + "\"}";
+            sendJson(exchange, 200, json);
+        }
+    }
+
+    /**
+     * GET /api/vehicle/movement?regNumber=...
+     */
+    class VehicleMovementHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (handlePreflight(exchange)) return;
+
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 405, "{\"success\":false,\"message\":\"Method not allowed\"}");
+                return;
+            }
+
+            Map<String, String> params = queryParams(exchange);
+            String regNumber = params.get("regNumber");
+
+            if (regNumber == null || regNumber.trim().isEmpty()) {
+                sendJson(exchange, 400, "{\"success\":false,\"message\":\"regNumber query parameter is required\"}");
+                return;
+            }
+
+            String normalizedReg = regNumber.trim().toUpperCase();
+            List<EntryLog> history = trafficService.getVehicleMovementHistory(normalizedReg);
+            if (history == null) {
+                sendJson(exchange, 404, "{\"success\":false,\"message\":\"Vehicle not found\"}");
+                return;
+            }
+
+            Vehicle vehicle = vehicleService.getVehicle(normalizedReg);
+            String type = (vehicle != null) ? vehicle.getType().name() : "UNKNOWN";
+
+            StringBuilder data = new StringBuilder("[");
+            for (int i = 0; i < history.size(); i++) {
+                EntryLog log = history.get(i);
+                String entryTime = log.getEntryTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+                String exitTime = (log.getExitTime() != null)
+                    ? log.getExitTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+                    : "";
+                String status = (log.getExitTime() == null) ? "INSIDE" : "LEFT";
+
+                if (i > 0) data.append(",");
+                data.append("{")
+                    .append("\"regNumber\":\"").append(esc(normalizedReg)).append("\",")
+                    .append("\"entryTime\":\"").append(entryTime).append("\",")
+                    .append("\"gate\":\"").append(esc(log.getGate())).append("\",")
+                    .append("\"exitTime\":\"").append(exitTime).append("\",")
+                    .append("\"status\":\"").append(status).append("\",")
+                    .append("\"type\":\"").append(type).append("\"")
+                    .append("}");
+            }
+            data.append("]");
+
+            String json = "{\"success\":true,\"count\":" + history.size() + ",\"data\":" + data.toString() + "}";
+            sendJson(exchange, 200, json);
+        }
+    }
+
+    /**
+     * GET /api/logs/search?regNumber=...&dateFrom=...&dateTo=...
+     */
+    class SearchLogsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (handlePreflight(exchange)) return;
+
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 405, "{\"success\":false,\"message\":\"Method not allowed\"}");
+                return;
+            }
+
+            Map<String, String> params = queryParams(exchange);
+            String regNumber = params.get("regNumber");
+            String dateFrom = params.get("dateFrom");
+            String dateTo = params.get("dateTo");
+
+            String normalizedReg = (regNumber == null || regNumber.trim().isEmpty()) ? null : regNumber.trim().toUpperCase();
+            String normalizedDateFrom = (dateFrom == null || dateFrom.trim().isEmpty()) ? null : dateFrom.trim().replace("T", " ");
+            String normalizedDateTo = (dateTo == null || dateTo.trim().isEmpty()) ? null : dateTo.trim().replace("T", " ");
+
+            List<EntryLog> logs = trafficService.searchTrafficLogs(normalizedReg, normalizedDateFrom, normalizedDateTo);
+
+            StringBuilder data = new StringBuilder("[");
+            for (int i = 0; i < logs.size(); i++) {
+                EntryLog log = logs.get(i);
+                Vehicle vehicle = vehicleDAO.findVehicleById(log.getVehicleId());
+                String reg = (vehicle != null) ? vehicle.getRegistrationNumber() : "ID-" + log.getVehicleId();
+                String entryTime = log.getEntryTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+                String exitTime = (log.getExitTime() != null)
+                    ? log.getExitTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+                    : "";
+                String status = (log.getExitTime() == null) ? "INSIDE" : "LEFT";
+
+                if (i > 0) data.append(",");
+                data.append("{")
+                    .append("\"regNumber\":\"").append(esc(reg)).append("\",")
+                    .append("\"entryTime\":\"").append(entryTime).append("\",")
+                    .append("\"gate\":\"").append(esc(log.getGate())).append("\",")
+                    .append("\"exitTime\":\"").append(exitTime).append("\",")
+                    .append("\"status\":\"").append(status).append("\"")
+                    .append("}");
+            }
+            data.append("]");
+
+            String json = "{\"success\":true,\"count\":" + logs.size() + ",\"data\":" + data.toString() + "}";
+            sendJson(exchange, 200, json);
+        }
+    }
+
+    /**
+     * GET /api/dashboard/summary
+     */
+    class DashboardSummaryHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (handlePreflight(exchange)) return;
+
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 405, "{\"success\":false,\"message\":\"Method not allowed\"}");
+                return;
+            }
+
+            Map<String, Integer> daily = reportingService.getDailyStatistics();
+            int entriesToday = daily.getOrDefault("entries", 0);
+            int exitsToday = daily.getOrDefault("exits", 0);
+            int overstayCount = reportingService.getOverstayCount();
+            int currentlyInside = trafficService.viewVehiclesCurrentlyInside().size();
+
+            Map<VehicleType, Integer> distribution = reportingService.getVehicleTypeDistribution();
+            StringBuilder dist = new StringBuilder("{");
+            VehicleType[] types = VehicleType.values();
+            for (int i = 0; i < types.length; i++) {
+                if (i > 0) dist.append(",");
+                int count = distribution.getOrDefault(types[i], 0);
+                dist.append("\"").append(types[i].name()).append("\":").append(count);
+            }
+            dist.append("}");
+
+            String json = "{\"success\":true,"
+                + "\"entriesToday\":" + entriesToday + ","
+                + "\"exitsToday\":" + exitsToday + ","
+                + "\"currentlyInside\":" + currentlyInside + ","
+                + "\"overstayCount\":" + overstayCount + ","
+                + "\"distribution\":" + dist.toString()
+                + "}";
+            sendJson(exchange, 200, json);
+        }
+    }
+
+    /**
      * POST /api/vehicle/register
      * Body: {"regNumber": "...", "ownerName": "...", "ownerContact": "...", "type": "..."}
      */
@@ -372,6 +762,8 @@ public class ApiServer {
                 return;
             }
 
+            String normalizedReg = regNumber.trim().toUpperCase();
+
             VehicleType type;
             try {
                 type = VehicleType.valueOf(typeStr.trim().toUpperCase());
@@ -380,8 +772,14 @@ public class ApiServer {
                 return;
             }
 
+            Vehicle existing = vehicleService.getVehicle(normalizedReg);
+            if (existing != null) {
+                sendJson(exchange, 409, "{\"success\":false,\"message\":\"Vehicle is already registered\"}");
+                return;
+            }
+
             boolean success = vehicleService.registerVehicle(
-                regNumber.trim().toUpperCase(),
+                normalizedReg,
                 ownerName != null ? ownerName.trim() : "",
                 ownerContact != null ? ownerContact.trim() : "",
                 type
