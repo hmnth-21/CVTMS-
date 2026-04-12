@@ -1,13 +1,13 @@
 package com.cvtms.service;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.List;
+
 import com.cvtms.dao.LogDAO;
 import com.cvtms.model.EntryLog;
 import com.cvtms.model.Vehicle;
 import com.cvtms.model.VehicleType;
-
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.util.List;
 
 public class TrafficService {
     private LogDAO logDAO;
@@ -22,12 +22,19 @@ public class TrafficService {
     }
 
     public boolean recordEntry(String registrationNumber, String gate, String externalPurpose) {
+        if (registrationNumber == null || registrationNumber.trim().isEmpty()) {
+            System.out.println("Registration number cannot be empty.");
+            return false;
+        }
+
+        String normalizedReg = registrationNumber.trim().toUpperCase();
+
         if (gate == null || gate.trim().isEmpty()) {
             System.out.println("Gate name cannot be empty.");
             return false;
         }
 
-        Vehicle vehicle = vehicleService.getVehicle(registrationNumber);
+        Vehicle vehicle = vehicleService.getVehicle(normalizedReg);
         if (vehicle == null) {
             System.out.println("Vehicle not found. Please register the vehicle first.");
             return false;
@@ -35,20 +42,26 @@ public class TrafficService {
 
         EntryLog activeLog = logDAO.findActiveEntryLogForVehicle(vehicle.getId());
         if (activeLog != null) {
-            System.out.println("Error: Vehicle " + registrationNumber + " is already inside the campus (duplicate entry prevented).");
+            System.out.println("Error: Vehicle " + normalizedReg + " is already inside the campus (duplicate entry prevented).");
             return false;
         }
 
         int logId = logDAO.createEntryLog(vehicle.getId(), gate, externalPurpose);
         if (logId > 0) {
-            System.out.println("Entry recorded successfully for " + registrationNumber);
+            System.out.println("Entry recorded successfully for " + normalizedReg);
             return true;
         }
         return false;
     }
 
     public boolean recordExit(String registrationNumber, String justificationIfNeeded) {
-        Vehicle vehicle = vehicleService.getVehicle(registrationNumber);
+        if (registrationNumber == null || registrationNumber.trim().isEmpty()) {
+            System.out.println("Registration number cannot be empty.");
+            return false;
+        }
+
+        String normalizedReg = registrationNumber.trim().toUpperCase();
+        Vehicle vehicle = vehicleService.getVehicle(normalizedReg);
         if (vehicle == null) {
             System.out.println("Vehicle not found.");
             return false;
@@ -56,7 +69,7 @@ public class TrafficService {
 
         EntryLog activeLog = logDAO.findActiveEntryLogForVehicle(vehicle.getId());
         if (activeLog == null) {
-            System.out.println("Error: Vehicle " + registrationNumber + " does not have an active entry record.");
+            System.out.println("Error: Vehicle " + normalizedReg + " does not have an active entry record.");
             return false;
         }
 

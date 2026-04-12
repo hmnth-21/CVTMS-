@@ -37,7 +37,7 @@
                 <button type="submit" class="btn btn-primary w-100">Sign In</button>
             </form>
             <div class="login-hint">
-                <p><small>Hint: use "admin" for Admin, "security" for Security</small></p>
+                <p><small>Default admin: admin / admin</small></p>
             </div>
         </div>
     </div>
@@ -54,7 +54,10 @@
                 <!-- Admin specific nav items (injected via JS or controlled by CSS classes) -->
                 <ul id="admin-nav" class="nav-list" style="display: none;">
                     <li><a href="#" data-target="admin-dashboard" class="active">Overview & Stats</a></li>
+                    <li><a href="#" data-target="admin-currently-inside">Vehicles Currently Inside</a></li>
+                    <li><a href="#" data-target="admin-overstays">Overstay List</a></li>
                     <li><a href="#" data-target="admin-incidents">View All Incidents</a></li>
+                    <li><a href="#" data-target="admin-users">View All Users</a></li>
                     <li><a href="#" data-target="admin-register">Register Security</a></li>
                 </ul>
                 <!-- Security specific nav items -->
@@ -96,19 +99,19 @@
                     <div class="stats-grid">
                         <div class="stat-card">
                             <div class="stat-title">Total Entries Today</div>
-                            <div class="stat-value text-green">142</div>
+                            <div class="stat-value text-green" id="stat-entries-today">—</div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-title">Total Exits Today</div>
-                            <div class="stat-value text-blue">110</div>
+                            <div class="stat-value text-blue" id="stat-exits-today">—</div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-title">Currently Inside</div>
-                            <div class="stat-value text-amber">32</div>
+                            <div class="stat-value text-amber" id="stat-currently-inside">—</div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-title">Overstay Incidents</div>
-                            <div class="stat-value text-red">3</div>
+                            <div class="stat-value text-red" id="stat-overstay-count">—</div>
                         </div>
                     </div>
                     <div class="card mt-4">
@@ -117,12 +120,60 @@
                         </div>
                         <div class="card-body">
                             <ul class="distribution-list">
-                                <li><span>CAMPUS</span> <span class="badge">12</span></li>
-                                <li><span>CAB</span> <span class="badge">8</span></li>
-                                <li><span>DELIVERY</span> <span class="badge">5</span></li>
-                                <li><span>WORK</span> <span class="badge">4</span></li>
-                                <li><span>EXTERNAL</span> <span class="badge">3</span></li>
+                                <li><span>CAMPUS</span> <span class="badge" id="dist-campus">—</span></li>
+                                <li><span>CAB</span> <span class="badge" id="dist-cab">—</span></li>
+                                <li><span>DELIVERY</span> <span class="badge" id="dist-delivery">—</span></li>
+                                <li><span>WORK</span> <span class="badge" id="dist-work">—</span></li>
+                                <li><span>EXTERNAL</span> <span class="badge" id="dist-external">—</span></li>
                             </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Admin: Vehicles Currently Inside -->
+                <div id="admin-currently-inside" class="page-section hidden">
+                    <div class="card">
+                        <div class="card-header d-flex justify-between">
+                            <h3>Vehicles Currently Inside</h3>
+                            <button class="btn btn-sm btn-outline" id="refresh-admin-inside-btn">Refresh</button>
+                        </div>
+                        <div class="card-body">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Registration Number</th>
+                                        <th>Entry Time</th>
+                                        <th>Gate</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-currently-inside-tbody">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Admin: Overstay List -->
+                <div id="admin-overstays" class="page-section hidden">
+                    <div class="card">
+                        <div class="card-header d-flex justify-between">
+                            <h3>Overstay List</h3>
+                            <button class="btn btn-sm btn-outline" id="refresh-overstays-btn">Refresh</button>
+                        </div>
+                        <div class="card-body">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Vehicle Number</th>
+                                        <th>Duration (hours)</th>
+                                        <th>Justification</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="overstays-tbody">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -173,6 +224,30 @@
                     </div>
                 </div>
 
+                <!-- Admin: View All Users -->
+                <div id="admin-users" class="page-section hidden">
+                    <div class="card">
+                        <div class="card-header d-flex justify-between">
+                            <h3>All Users</h3>
+                            <button class="btn btn-sm btn-outline" id="refresh-users-btn">Refresh</button>
+                        </div>
+                        <div class="card-body">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Username</th>
+                                        <th>Role</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-tbody">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
 
                 <!-- ==============================
                      SECURITY VIEWS
@@ -218,6 +293,24 @@
                             </form>
                             <div id="quick-search-result" class="search-result mt-2" style="display:none;"></div>
                         </div>
+
+                        <div class="card action-card">
+                            <h3>Register Vehicle</h3>
+                            <p>Add a vehicle first, then record entry.</p>
+                            <form id="register-vehicle-ops-form" class="mt-2">
+                                <input type="text" name="regNumber" placeholder="Reg Number" required class="mb-2 w-100">
+                                <select name="type" class="mb-2 w-100" required>
+                                    <option value="CAMPUS">CAMPUS</option>
+                                    <option value="CAB">CAB</option>
+                                    <option value="DELIVERY">DELIVERY</option>
+                                    <option value="WORK">WORK</option>
+                                    <option value="EXTERNAL">EXTERNAL</option>
+                                </select>
+                                <input type="text" name="ownerName" placeholder="Owner Name (optional)" class="mb-2 w-100">
+                                <input type="text" name="ownerContact" placeholder="Owner Contact (optional)" class="mb-2 w-100">
+                                <button type="submit" class="btn btn-primary w-100">Register Vehicle</button>
+                            </form>
+                        </div>
                     </div>
                 </div>
 
@@ -226,7 +319,7 @@
                     <div class="card">
                         <div class="card-header d-flex justify-between">
                             <h3>Vehicles Currently Inside</h3>
-                            <button class="btn btn-sm btn-outline">Refresh</button>
+                            <button class="btn btn-sm btn-outline" id="refresh-inside-btn">Refresh</button>
                         </div>
                         <div class="card-body">
                             <table class="data-table">
@@ -256,11 +349,11 @@
                             <form id="register-vehicle-form">
                                 <div class="form-group">
                                     <label>Registration Number *</label>
-                                    <input type="text" required>
+                                    <input type="text" name="regNumber" required>
                                 </div>
                                 <div class="form-group">
                                     <label>Vehicle Type *</label>
-                                    <select required>
+                                    <select name="type" required>
                                         <option value="CAMPUS">CAMPUS</option>
                                         <option value="CAB">CAB</option>
                                         <option value="DELIVERY">DELIVERY</option>
@@ -270,11 +363,11 @@
                                 </div>
                                 <div class="form-group">
                                     <label>Owner Name</label>
-                                    <input type="text">
+                                    <input type="text" name="ownerName">
                                 </div>
                                 <div class="form-group">
                                     <label>Owner Contact</label>
-                                    <input type="text">
+                                    <input type="text" name="ownerContact">
                                 </div>
                                 <button type="submit" class="btn btn-primary">Register Vehicle</button>
                             </form>
@@ -289,10 +382,10 @@
                             <h3>Vehicle Movement History</h3>
                         </div>
                         <div class="card-body">
-                            <div class="search-bar mb-4" style="max-width: 400px; display:flex;">
-                                <input type="text" placeholder="Enter Registration Number..." class="w-100" style="margin-right: 8px;">
-                                <button class="btn btn-primary">Lookup</button>
-                            </div>
+                            <form id="movement-history-form" class="search-bar mb-4" style="max-width: 400px; display:flex;">
+                                <input type="text" id="movement-history-reg" placeholder="Enter Registration Number..." class="w-100" style="margin-right: 8px;" required>
+                                <button type="submit" class="btn btn-primary">Lookup</button>
+                            </form>
                             <table class="data-table">
                                 <thead>
                                     <tr>

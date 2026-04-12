@@ -1,0 +1,10 @@
+{
+  "name": "cvtms",
+  "version": "1.0.0",
+  "description": "Campus Vehicular Traffic Management System",
+  "scripts": {
+    "dev": "npx -y serve frontend -p 3000",
+    "backend": "cmd /c run.bat api",
+    "backend:console": "cmd /c run.bat"
+  }
+}

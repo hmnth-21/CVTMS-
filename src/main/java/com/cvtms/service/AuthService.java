@@ -15,6 +15,15 @@ public class AuthService {
     }
 
     public boolean register(String username, String password, Role role) {
+        // Normalize inputs to prevent case/whitespace mismatches
+        username = username.trim().toLowerCase();
+        password = password.trim();
+
+        if (username.isEmpty() || password.isEmpty()) {
+            System.out.println("Username and password cannot be empty.");
+            return false;
+        }
+
         // Check if user exists
         if (userDAO.findByUsername(username) != null) {
             System.out.println("Username already exists.");
@@ -27,6 +36,10 @@ public class AuthService {
     }
 
     public boolean login(String username, String password) {
+        // Normalize inputs to match registration format
+        username = username.trim().toLowerCase();
+        password = password.trim();
+
         User user = userDAO.findByUsername(username);
         if (user != null) {
             if (BCrypt.checkpw(password, user.getPasswordHash())) {

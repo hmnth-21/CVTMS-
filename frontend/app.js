@@ -1,18 +1,18 @@
-// Mock Database State
+// API Base URL — points to the Java backend HttpServer
+const API_BASE = 'http://localhost:8080/api';
+
+// UI state mirrors API responses
 let state = {
-    currentlyInside: [
-        { id: 'KA-05-MM-1212', entryTime: '2026-04-04 08:30', gate: 'Main Gate', type: 'CAMPUS' },
-        { id: 'TN-10-XX-4455', entryTime: '2026-04-04 09:15', gate: 'East Gate', type: 'EXTERNAL' }
-    ],
-    movementHistory: [
-        { id: 'KA-05-MM-1212', entryTime: '2026-04-04 08:30', gate: 'Main Gate', exitTime: null, status: 'INSIDE' },
-        { id: 'TN-10-XX-4455', entryTime: '2026-04-04 09:15', gate: 'East Gate', exitTime: null, status: 'INSIDE' },
-        { id: 'MH-12-AB-9090', entryTime: '2026-04-04 07:00', gate: 'West Gate', exitTime: '2026-04-04 12:00', status: 'LEFT' }
-    ],
-    incidents: [
-        { date: '2026-04-04 10:15', id: 'KA-01-AB-1234', severity: 'HIGH', desc: 'Spotted speeding near main library.' },
-        { date: '2026-04-03 14:20', id: 'MH-12-XY-9876', severity: 'MEDIUM', desc: 'Overstayed limit by 2 hours.' }
-    ]
+    currentlyInside: [],
+    movementHistory: [],
+    incidents: [],
+    users: [],
+    overstays: []
+};
+
+let currentSessionUser = {
+    username: '',
+    role: ''
 };
 
 // DOM Elements
@@ -79,12 +79,26 @@ function renderTables() {
         currentlyInsideTbody.innerHTML = state.currentlyInside.length === 0 ? `<tr><td colspan="4">No vehicles inside.</td></tr>` : 
         state.currentlyInside.map(v => `
             <tr>
-                <td>${v.id}</td>
+                <td>${v.regNumber}</td>
                 <td>${v.entryTime}</td>
                 <td>${v.gate}</td>
                 <td><span class="tag tag-${v.type === 'CAMPUS' ? 'blue' : 'gray'}">${v.type}</span></td>
             </tr>
         `).join('');
+    }
+
+    // 2b. Admin Currently Inside Table
+    const adminInsideTbody = document.getElementById('admin-currently-inside-tbody');
+    if (adminInsideTbody) {
+        adminInsideTbody.innerHTML = state.currentlyInside.length === 0
+            ? `<tr><td colspan="3">No vehicles inside.</td></tr>`
+            : state.currentlyInside.map(v => `
+                <tr>
+                    <td>${v.regNumber}</td>
+                    <td>${v.entryTime}</td>
+                    <td>${v.gate}</td>
+                </tr>
+            `).join('');
     }
 
     // 3. Movement History Table
@@ -93,13 +107,43 @@ function renderTables() {
         historyTbody.innerHTML = state.movementHistory.length === 0 ? `<tr><td colspan="5">No history found.</td></tr>` : 
         state.movementHistory.map(v => `
             <tr>
-                <td>${v.id}</td>
+                <td>${v.regNumber}</td>
                 <td>${v.entryTime}</td>
                 <td>${v.gate}</td>
                 <td>${v.exitTime || '-'}</td>
                 <td><span class="tag tag-${v.status === 'INSIDE' ? 'amber' : 'green'}">${v.status}</span></td>
             </tr>
         `).join('');
+    }
+
+    // 4. Admin Users Table
+    const usersTbody = document.getElementById('users-tbody');
+    if (usersTbody) {
+        usersTbody.innerHTML = state.users.length === 0
+            ? `<tr><td colspan="3">No users found.</td></tr>`
+            : state.users.map(user => `
+                <tr>
+                    <td>${user.username}</td>
+                    <td><span class="tag tag-${user.role === 'ADMIN' ? 'blue' : 'gray'}">${user.role}</span></td>
+                    <td>
+                        ${user.role === 'ADMIN' ? '-' : `<button class="btn btn-sm btn-red delete-user-btn" data-username="${user.username}">Delete</button>`}
+                    </td>
+                </tr>
+            `).join('');
+    }
+
+    // 5. Overstay Table
+    const overstaysTbody = document.getElementById('overstays-tbody');
+    if (overstaysTbody) {
+        overstaysTbody.innerHTML = state.overstays.length === 0
+            ? `<tr><td colspan="3">No overstays found.</td></tr>`
+            : state.overstays.map(item => `
+                <tr>
+                    <td>${item.regNumber}</td>
+                    <td>${item.durationHours}</td>
+                    <td>${item.justification || '-'}</td>
+                </tr>
+            `).join('');
     }
 }
 
@@ -122,6 +166,117 @@ function switchView(targetSectionId, title) {
     
     // Rerender tables when navigating
     renderTables();
+
+    // Load live data from API for relevant sections
+    if (targetSectionId === 'sec-currently-inside') {
+        loadVehiclesInside();
+    } else if (targetSectionId === 'admin-dashboard') {
+        loadVehiclesInside();
+        loadDashboardSummary();
+    } else if (targetSectionId === 'admin-currently-inside') {
+        loadVehiclesInside();
+    } else if (targetSectionId === 'admin-overstays') {
+        loadOverstays();
+    } else if (targetSectionId === 'admin-incidents') {
+        loadIncidents();
+    } else if (targetSectionId === 'admin-users') {
+        loadUsers();
+    }
+}
+
+// =========================================================================
+// API Data Loaders
+// =========================================================================
+
+/** Fetch vehicles currently inside from API and update state + UI */
+async function loadVehiclesInside() {
+    try {
+        const response = await fetch(`${API_BASE}/vehicles/inside`);
+        const result = await response.json();
+        if (result.success) {
+            state.currentlyInside = Array.isArray(result.data) ? result.data : [];
+            // Update admin dashboard stat card (count from same query = consistent)
+            const countEl = document.getElementById('stat-currently-inside');
+            if (countEl) countEl.textContent = result.count ?? state.currentlyInside.length;
+            renderTables();
+        }
+    } catch (err) {
+        console.error('Failed to load vehicles inside:', err);
+    }
+}
+
+/** Fetch dashboard summary metrics from API. */
+async function loadDashboardSummary() {
+    try {
+        const response = await fetch(`${API_BASE}/dashboard/summary`);
+        const result = await response.json();
+        if (!result.success) return;
+
+        const entriesEl = document.getElementById('stat-entries-today');
+        const exitsEl = document.getElementById('stat-exits-today');
+        const overstayEl = document.getElementById('stat-overstay-count');
+
+        if (entriesEl) entriesEl.textContent = result.entriesToday ?? 0;
+        if (exitsEl) exitsEl.textContent = result.exitsToday ?? 0;
+        if (overstayEl) overstayEl.textContent = result.overstayCount ?? 0;
+
+        const distribution = result.distribution || {};
+        const distCampus = document.getElementById('dist-campus');
+        const distCab = document.getElementById('dist-cab');
+        const distDelivery = document.getElementById('dist-delivery');
+        const distWork = document.getElementById('dist-work');
+        const distExternal = document.getElementById('dist-external');
+
+        if (distCampus) distCampus.textContent = distribution.CAMPUS ?? 0;
+        if (distCab) distCab.textContent = distribution.CAB ?? 0;
+        if (distDelivery) distDelivery.textContent = distribution.DELIVERY ?? 0;
+        if (distWork) distWork.textContent = distribution.WORK ?? 0;
+        if (distExternal) distExternal.textContent = distribution.EXTERNAL ?? 0;
+    } catch (err) {
+        console.error('Failed to load dashboard summary:', err);
+    }
+}
+
+/** Fetch incidents list from API and update state + table. */
+async function loadIncidents() {
+    try {
+        const response = await fetch(`${API_BASE}/incidents`);
+        const result = await response.json();
+        if (result.success) {
+            state.incidents = Array.isArray(result.data) ? result.data : [];
+            renderTables();
+        }
+    } catch (err) {
+        console.error('Failed to load incidents:', err);
+    }
+}
+
+/** Fetch all users from API and update admin users table. */
+async function loadUsers() {
+    try {
+        const response = await fetch(`${API_BASE}/users`);
+        const result = await response.json();
+        if (result.success) {
+            state.users = Array.isArray(result.data) ? result.data : [];
+            renderTables();
+        }
+    } catch (err) {
+        console.error('Failed to load users:', err);
+    }
+}
+
+/** Fetch overstays list from API and update admin overstay table. */
+async function loadOverstays() {
+    try {
+        const response = await fetch(`${API_BASE}/overstays`);
+        const result = await response.json();
+        if (result.success) {
+            state.overstays = Array.isArray(result.data) ? result.data : [];
+            renderTables();
+        }
+    } catch (err) {
+        console.error('Failed to load overstays:', err);
+    }
 }
 
 // Initial render
@@ -135,29 +290,48 @@ document.querySelectorAll('.nav-list a').forEach(link => {
     });
 });
 
-// Authentication Mock
-loginForm.addEventListener('submit', (e) => {
+// Authentication — calls backend API
+loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const user = usernameInput.value.trim().toLowerCase();
-    
-    if (user === 'admin' || user === 'security') {
-        loginView.classList.remove('active');
-        appView.classList.add('active');
-        currentUsernameSpan.textContent = usernameInput.value;
-        userRoleBadge.textContent = user;
-        
-        if (user === 'admin') {
-            adminNav.style.display = 'block';
-            securityNav.style.display = 'none';
-            switchView('admin-dashboard', 'Overview & Stats');
+    const user = usernameInput.value.trim();
+    const pass = passwordInput.value.trim();
+
+    if (!user || !pass) {
+        showToast('Please enter username and password.', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user, password: pass })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            loginView.classList.remove('active');
+            appView.classList.add('active');
+            currentUsernameSpan.textContent = data.username;
+            userRoleBadge.textContent = data.role;
+            currentSessionUser = { username: data.username, role: data.role };
+
+            if (data.role === 'ADMIN') {
+                adminNav.style.display = 'block';
+                securityNav.style.display = 'none';
+                switchView('admin-dashboard', 'Overview & Stats');
+            } else {
+                adminNav.style.display = 'none';
+                securityNav.style.display = 'block';
+                switchView('sec-dashboard', 'Operations');
+            }
+            showToast(`Welcome back, ${data.username}!`);
         } else {
-            adminNav.style.display = 'none';
-            securityNav.style.display = 'block';
-            switchView('sec-dashboard', 'Operations');
+            showToast(data.message || 'Login failed.', 'error');
         }
-        showToast(`Welcome back, ${user}!`);
-    } else {
-        showToast('Invalid credentials. Use "admin" or "security".', 'error');
+    } catch (err) {
+        showToast('Cannot connect to server. Is the backend running?', 'error');
     }
 });
 
@@ -165,6 +339,7 @@ logoutBtn.addEventListener('click', () => {
     appView.classList.remove('active');
     loginView.classList.add('active');
     loginForm.reset();
+    currentSessionUser = { username: '', role: '' };
     showToast('Logged out successfully.');
 });
 
@@ -176,97 +351,321 @@ function getCurrentTimeStr() {
            ':' + String(now.getMinutes()).padStart(2, '0');
 }
 
-// Mock Forms Submissions
+// Form submissions
 document.querySelectorAll('form:not(#login-form)').forEach(form => {
     form.addEventListener('submit', (e) => {
         e.preventDefault();
         
         if (form.id === 'record-entry-form') {
             const inputs = form.querySelectorAll('input, select');
-            const regNumber = inputs[0].value.toUpperCase();
+
+            const regNumber = inputs[0].value.toUpperCase().trim();
             const gate = inputs[1].value;
-            const timeStr = getCurrentTimeStr();
-            
-            state.currentlyInside.unshift({ id: regNumber, entryTime: timeStr, gate: gate, type: 'GUEST' });
-            state.movementHistory.unshift({ id: regNumber, entryTime: timeStr, gate: gate, exitTime: null, status: 'INSIDE' });
-            
-            showToast('Vehicle entry logged.');
-            form.reset();
-            renderTables();
+            const purpose = (inputs[2] && inputs[2].value) ? inputs[2].value : '';
+
+            fetch(`${API_BASE}/entry`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ regNumber, gate, purpose })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message || 'Vehicle entry logged.');
+                    form.reset();
+                    loadVehiclesInside(); // refresh data
+                    loadDashboardSummary();
+                } else {
+                    const message = data.message || 'Entry failed.';
+                    if (message.toLowerCase().includes('not registered')) {
+                        showToast(`${message} Use the Register Vehicle card in Operations.`, 'error');
+                    } else {
+                        showToast(message, 'error');
+                    }
+                }
+            })
+            .catch(() => showToast('Cannot connect to server.', 'error'));
             
         } else if (form.id === 'record-exit-form') {
             const inputs = form.querySelectorAll('input');
-            const regNumber = inputs[0].value.toUpperCase();
-            
-            const idx = state.currentlyInside.findIndex(v => v.id === regNumber);
-            if (idx !== -1) {
-                state.currentlyInside.splice(idx, 1);
-                
-                // Update history
-                const hist = state.movementHistory.find(v => v.id === regNumber && v.status === 'INSIDE');
-                if (hist) {
-                    hist.exitTime = getCurrentTimeStr();
-                    hist.status = 'LEFT';
+            const regNumber = inputs[0].value.toUpperCase().trim();
+            const justification = (inputs[1] && inputs[1].value) ? inputs[1].value.trim() : '';
+
+            fetch(`${API_BASE}/exit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ regNumber, justification })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message || 'Vehicle exit recorded.');
+                    form.reset();
+                    loadVehiclesInside(); // refresh list/count from DB-backed endpoint
+                    loadDashboardSummary();
+                } else {
+                    showToast(data.message || 'Exit failed.', 'error');
                 }
-                showToast(`Vehicle ${regNumber} exited successfully.`);
-            } else {
-                showToast(`Vehicle ${regNumber} is not currently inside!`, 'error');
-            }
-            form.reset();
-            renderTables();
+            })
+            .catch(() => showToast('Cannot connect to server.', 'error'));
             
         } else if (form.id === 'record-incident-form') {
             const inputs = form.querySelectorAll('input, select, textarea');
-            const regNumber = inputs[0].value.toUpperCase();
+            const regNumber = inputs[0].value.toUpperCase().trim();
             const severity = inputs[1].value;
-            const desc = inputs[2].value;
+            const description = inputs[2].value.trim();
+
+            fetch(`${API_BASE}/incidents`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ regNumber, severity, description })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message || 'Incident recorded.');
+                    form.reset();
+                    loadIncidents();
+                } else {
+                    showToast(data.message || 'Failed to record incident.', 'error');
+                }
+            })
+            .catch(() => showToast('Cannot connect to server.', 'error'));
             
-            state.incidents.unshift({
-                date: getCurrentTimeStr(),
-                id: regNumber,
-                severity: severity,
-                desc: desc
-            });
-            showToast('Incident recorded.');
-            form.reset();
-            renderTables();
+            
             
         } else if (form.id === 'quick-search-form') {
-            const regNumber = form.querySelector('input').value.toUpperCase();
+            const regNumber = form.querySelector('input').value.toUpperCase().trim();
             const res = document.getElementById('quick-search-result');
-            
-            // Look in history or currently inside
-            const found = state.currentlyInside.find(v => v.id === regNumber);
             res.style.display = 'block';
-            if (found) {
+
+            fetch(`${API_BASE}/vehicle/search?regNumber=${encodeURIComponent(regNumber)}`)
+            .then(async (resp) => {
+                const data = await resp.json();
+                return { ok: resp.ok, data };
+            })
+            .then(({ ok, data }) => {
+                if (!ok || !data.success) {
+                    res.innerHTML = `<div style="padding: 10px; color: var(--red);">${data.message || 'Vehicle not found.'}</div>`;
+                    return;
+                }
+
+                const gateText = data.gate ? ` (Gate: ${data.gate})` : '';
+                const exitText = data.exitTime ? `<br><strong>Last Exit:</strong> ${data.exitTime}` : '';
                 res.innerHTML = `
                     <div style="padding: 10px; background: rgba(37,99,235,0.05); border: 1px solid rgba(37,99,235,0.2); border-radius: 4px;">
-                        <strong>Vehicle:</strong> ${found.id} <br>
-                        <strong>Type:</strong> ${found.type}<br>
-                        <strong>Status:</strong> INSIDE (Gate: ${found.gate})
+                        <strong>Vehicle:</strong> ${data.regNumber} <br>
+                        <strong>Type:</strong> ${data.type}<br>
+                        <strong>Status:</strong> ${data.status}${gateText}
+                        ${data.entryTime ? `<br><strong>Last Entry:</strong> ${data.entryTime}` : ''}
+                        ${exitText}
                     </div>
                 `;
-            } else {
-                res.innerHTML = `<div style="padding: 10px; color: var(--red);">Vehicle not found inside campus.</div>`;
-            }
+            })
+            .catch(() => {
+                res.innerHTML = `<div style="padding: 10px; color: var(--red);">Cannot connect to server.</div>`;
+            });
+
+        } else if (form.id === 'movement-history-form') {
+            const regNumberInput = document.getElementById('movement-history-reg');
+            const regNumber = regNumberInput ? regNumberInput.value.toUpperCase().trim() : '';
+
+            fetch(`${API_BASE}/vehicle/movement?regNumber=${encodeURIComponent(regNumber)}`)
+            .then(async (resp) => {
+                const data = await resp.json();
+                return { ok: resp.ok, data };
+            })
+            .then(({ ok, data }) => {
+                if (ok && data.success) {
+                    state.movementHistory = Array.isArray(data.data) ? data.data : [];
+                    renderTables();
+                    showToast('Movement history loaded.');
+                } else {
+                    state.movementHistory = [];
+                    renderTables();
+                    showToast(data.message || 'No movement history found.', 'error');
+                }
+            })
+            .catch(() => {
+                state.movementHistory = [];
+                renderTables();
+                showToast('Cannot connect to server.', 'error');
+            });
             
         } else if (form.id === 'extended-search-form') {
+            const inputs = form.querySelectorAll('input');
+            const regNumber = (inputs[0] && inputs[0].value) ? inputs[0].value.toUpperCase().trim() : '';
+            const dateFrom = (inputs[1] && inputs[1].value) ? inputs[1].value.trim() : '';
+            const dateTo = (inputs[2] && inputs[2].value) ? inputs[2].value.trim() : '';
+
+            const params = new URLSearchParams();
+            if (regNumber) params.set('regNumber', regNumber);
+            if (dateFrom) params.set('dateFrom', dateFrom);
+            if (dateTo) params.set('dateTo', dateTo);
+
+            const url = `${API_BASE}/logs/search${params.toString() ? `?${params.toString()}` : ''}`;
             const tbody = document.getElementById('extended-search-tbody');
-            if (tbody) {
-                tbody.innerHTML = state.movementHistory.map(v => `
-                    <tr>
-                        <td>${v.entryTime}</td>
-                        <td>${v.id}</td>
-                        <td>${v.gate}</td>
-                        <td>${v.exitTime || '-'}</td>
-                    </tr>
-                `).join('');
-                showToast('Search completed.');
-            }
+            fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                if (!tbody) return;
+                if (data.success) {
+                    const rows = Array.isArray(data.data) ? data.data : [];
+                    tbody.innerHTML = rows.length === 0
+                        ? `<tr><td colspan="4" class="text-center">No matching logs found.</td></tr>`
+                        : rows.map(v => `
+                            <tr>
+                                <td>${v.entryTime}</td>
+                                <td>${v.regNumber}</td>
+                                <td>${v.gate}</td>
+                                <td>${v.exitTime || '-'}</td>
+                            </tr>
+                        `).join('');
+                    showToast('Search completed.');
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="4" class="text-center">No matching logs found.</td></tr>`;
+                    showToast(data.message || 'Search failed.', 'error');
+                }
+            })
+            .catch(() => {
+                if (tbody) {
+                    tbody.innerHTML = `<tr><td colspan="4" class="text-center">Unable to load logs.</td></tr>`;
+                }
+                showToast('Cannot connect to server.', 'error');
+            });
             
+        } else if (form.id === 'register-vehicle-form' || form.id === 'register-vehicle-ops-form') {
+            const regNumberField = form.elements.namedItem('regNumber');
+            const typeField = form.elements.namedItem('type');
+            const ownerNameField = form.elements.namedItem('ownerName');
+            const ownerContactField = form.elements.namedItem('ownerContact');
+
+            const regNumber = regNumberField ? regNumberField.value.toUpperCase().trim() : '';
+            const type = typeField ? typeField.value : '';
+            const ownerName = ownerNameField ? ownerNameField.value.trim() : '';
+            const ownerContact = ownerContactField ? ownerContactField.value.trim() : '';
+
+            fetch(`${API_BASE}/vehicle/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ regNumber, type, ownerName, ownerContact })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message || 'Vehicle registered.');
+                    form.reset();
+                } else {
+                    showToast(data.message || 'Registration failed.', 'error');
+                }
+            })
+            .catch(() => showToast('Cannot connect to server.', 'error'));
+
+        } else if (form.id === 'register-security-form') {
+            const newUser = document.getElementById('new-sec-user').value.trim();
+            const newPass = document.getElementById('new-sec-pass').value.trim();
+
+            if (!newUser || !newPass) {
+                showToast('Please enter both username and password.', 'error');
+                return;
+            }
+
+            fetch(`${API_BASE}/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: newUser, password: newPass })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message || 'Security user registered.');
+                    form.reset();
+                    loadUsers();
+                } else {
+                    showToast(data.message || 'Registration failed.', 'error');
+                }
+            })
+            .catch(() => showToast('Cannot connect to server.', 'error'));
+
         } else {
             showToast('Action successful!');
             form.reset();
         }
     });
 });
+
+const refreshInsideBtn = document.getElementById('refresh-inside-btn');
+if (refreshInsideBtn) {
+    refreshInsideBtn.addEventListener('click', () => {
+        loadVehiclesInside();
+        loadDashboardSummary();
+    });
+}
+
+const refreshUsersBtn = document.getElementById('refresh-users-btn');
+if (refreshUsersBtn) {
+    refreshUsersBtn.addEventListener('click', () => {
+        loadUsers();
+    });
+}
+
+const refreshAdminInsideBtn = document.getElementById('refresh-admin-inside-btn');
+if (refreshAdminInsideBtn) {
+    refreshAdminInsideBtn.addEventListener('click', () => {
+        loadVehiclesInside();
+    });
+}
+
+const refreshOverstaysBtn = document.getElementById('refresh-overstays-btn');
+if (refreshOverstaysBtn) {
+    refreshOverstaysBtn.addEventListener('click', () => {
+        loadOverstays();
+    });
+}
+
+const usersTbodyEl = document.getElementById('users-tbody');
+if (usersTbodyEl) {
+    usersTbodyEl.addEventListener('click', async (event) => {
+        const deleteBtn = event.target.closest('.delete-user-btn');
+        if (!deleteBtn) return;
+
+        if (currentSessionUser.role !== 'ADMIN') {
+            showToast('Only admin can delete users.', 'error');
+            return;
+        }
+
+        const targetUsername = deleteBtn.getAttribute('data-username');
+        if (!targetUsername) return;
+
+        const confirmed = window.confirm(`Delete user ${targetUsername}?`);
+        if (!confirmed) return;
+
+        const adminPassword = window.prompt('Enter admin password to confirm deletion:');
+        if (!adminPassword || !adminPassword.trim()) {
+            showToast('Admin password is required.', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE}/user`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    adminUsername: currentSessionUser.username,
+                    adminPassword: adminPassword.trim(),
+                    username: targetUsername
+                })
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(result.message || 'User deleted.');
+                loadUsers();
+            } else {
+                showToast(result.message || 'Failed to delete user.', 'error');
+            }
+        } catch (err) {
+            showToast('Cannot connect to server.', 'error');
+        }
+    });
+}
