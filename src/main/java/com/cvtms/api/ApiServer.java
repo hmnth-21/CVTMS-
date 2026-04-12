@@ -13,6 +13,7 @@ import com.cvtms.service.ReportingService;
 import com.cvtms.model.User;
 import com.cvtms.model.Role;
 import com.cvtms.model.Vehicle;
+import com.cvtms.model.VehicleType;
 import com.cvtms.model.EntryLog;
 import com.cvtms.dao.VehicleDAO;
 
@@ -54,6 +55,7 @@ public class ApiServer {
         server.createContext("/api/register", new RegisterHandler());
         server.createContext("/api/vehicles/inside", new VehiclesInsideHandler());
         server.createContext("/api/entry", new EntryHandler());
+        server.createContext("/api/vehicle/register", new VehicleRegisterHandler());
 
         server.setExecutor(null); // default executor
     }
@@ -305,6 +307,54 @@ public class ApiServer {
                 sendJson(exchange, 200, "{\"success\":true,\"message\":\"Vehicle entry recorded.\"}");
             } else {
                 sendJson(exchange, 400, "{\"success\":false,\"message\":\"Entry failed. Vehicle may not exist or is already inside.\"}");
+            }
+        }
+    }
+
+    /**
+     * POST /api/vehicle/register
+     * Body: {"regNumber": "...", "ownerName": "...", "ownerContact": "...", "type": "..."}
+     */
+    class VehicleRegisterHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (handlePreflight(exchange)) return;
+
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 405, "{\"success\":false,\"message\":\"Method not allowed\"}");
+                return;
+            }
+
+            String body = readBody(exchange);
+            String regNumber = jsonValue(body, "regNumber");
+            String ownerName = jsonValue(body, "ownerName");
+            String ownerContact = jsonValue(body, "ownerContact");
+            String typeStr = jsonValue(body, "type");
+
+            if (regNumber == null || regNumber.trim().isEmpty() || typeStr == null || typeStr.trim().isEmpty()) {
+                sendJson(exchange, 400, "{\"success\":false,\"message\":\"Registration number and type are required\"}");
+                return;
+            }
+
+            VehicleType type;
+            try {
+                type = VehicleType.valueOf(typeStr.trim().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                sendJson(exchange, 400, "{\"success\":false,\"message\":\"Invalid vehicle type\"}");
+                return;
+            }
+
+            boolean success = vehicleService.registerVehicle(
+                regNumber.trim().toUpperCase(),
+                ownerName != null ? ownerName.trim() : "",
+                ownerContact != null ? ownerContact.trim() : "",
+                type
+            );
+
+            if (success) {
+                sendJson(exchange, 200, "{\"success\":true,\"message\":\"Vehicle registered successfully\"}");
+            } else {
+                sendJson(exchange, 400, "{\"success\":false,\"message\":\"Failed to register vehicle. It may already exist.\"}");
             }
         }
     }

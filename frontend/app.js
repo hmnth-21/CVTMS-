@@ -320,6 +320,29 @@ document.querySelectorAll('form:not(#login-form)').forEach(form => {
                 showToast('Search completed.');
             }
             
+        } else if (form.id === 'register-vehicle-form') {
+            const inputs = form.querySelectorAll('input, select');
+            const regNumber = inputs[0].value.toUpperCase().trim();
+            const type = inputs[1].value;
+            const ownerName = (inputs[2] && inputs[2].value) ? inputs[2].value.trim() : '';
+            const ownerContact = (inputs[3] && inputs[3].value) ? inputs[3].value.trim() : '';
+
+            fetch(`${API_BASE}/vehicle/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ regNumber, type, ownerName, ownerContact })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message || 'Vehicle registered.');
+                    form.reset();
+                } else {
+                    showToast(data.message || 'Registration failed.', 'error');
+                }
+            })
+            .catch(() => showToast('Cannot connect to server.', 'error'));
+
         } else if (form.id === 'register-security-form') {
             const newUser = document.getElementById('new-sec-user').value.trim();
             const newPass = document.getElementById('new-sec-pass').value.trim();
