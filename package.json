@@ -1,0 +1,9 @@
+{
+  "name": "cvtms",
+  "version": "1.0.0",
+  "description": "Campus Vehicular Traffic Management System",
+  "scripts": {
+    "dev": "npx -y serve frontend -p 3000",
+    "backend": "mvn clean compile exec:java"
+  }
+}
