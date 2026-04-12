@@ -4,6 +4,7 @@
   "description": "Campus Vehicular Traffic Management System",
   "scripts": {
     "dev": "npx -y serve frontend -p 3000",
-    "backend": "mvn clean compile exec:java"
+    "backend": "cmd /c run.bat api",
+    "backend:console": "cmd /c run.bat"
   }
 }
