@@ -3,10 +3,7 @@ const API_BASE = 'http://localhost:8080/api';
 
 // Mock Database State
 let state = {
-    currentlyInside: [
-        { id: 'KA-05-MM-1212', entryTime: '2026-04-04 08:30', gate: 'Main Gate', type: 'CAMPUS' },
-        { id: 'TN-10-XX-4455', entryTime: '2026-04-04 09:15', gate: 'East Gate', type: 'EXTERNAL' }
-    ],
+    currentlyInside: [],
     movementHistory: [
         { id: 'KA-05-MM-1212', entryTime: '2026-04-04 08:30', gate: 'Main Gate', exitTime: null, status: 'INSIDE' },
         { id: 'TN-10-XX-4455', entryTime: '2026-04-04 09:15', gate: 'East Gate', exitTime: null, status: 'INSIDE' },
@@ -82,7 +79,7 @@ function renderTables() {
         currentlyInsideTbody.innerHTML = state.currentlyInside.length === 0 ? `<tr><td colspan="4">No vehicles inside.</td></tr>` : 
         state.currentlyInside.map(v => `
             <tr>
-                <td>${v.id}</td>
+                <td>${v.regNumber}</td>
                 <td>${v.entryTime}</td>
                 <td>${v.gate}</td>
                 <td><span class="tag tag-${v.type === 'CAMPUS' ? 'blue' : 'gray'}">${v.type}</span></td>
@@ -125,6 +122,32 @@ function switchView(targetSectionId, title) {
     
     // Rerender tables when navigating
     renderTables();
+
+    // Load live data from API for relevant sections
+    if (targetSectionId === 'sec-currently-inside' || targetSectionId === 'admin-dashboard') {
+        loadVehiclesInside();
+    }
+}
+
+// =========================================================================
+// API Data Loaders
+// =========================================================================
+
+/** Fetch vehicles currently inside from API and update state + UI */
+async function loadVehiclesInside() {
+    try {
+        const response = await fetch(`${API_BASE}/vehicles/inside`);
+        const result = await response.json();
+        if (result.success) {
+            state.currentlyInside = result.data;
+            // Update admin dashboard stat card (count from same query = consistent)
+            const countEl = document.getElementById('stat-currently-inside');
+            if (countEl) countEl.textContent = result.count;
+            renderTables();
+        }
+    } catch (err) {
+        console.error('Failed to load vehicles inside:', err);
+    }
 }
 
 // Initial render
@@ -168,6 +191,7 @@ loginForm.addEventListener('submit', async (e) => {
                 adminNav.style.display = 'block';
                 securityNav.style.display = 'none';
                 switchView('admin-dashboard', 'Overview & Stats');
+                loadVehiclesInside();
             } else {
                 adminNav.style.display = 'none';
                 securityNav.style.display = 'block';

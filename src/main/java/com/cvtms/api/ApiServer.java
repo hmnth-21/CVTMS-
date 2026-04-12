@@ -11,6 +11,9 @@ import com.cvtms.service.VehicleService;
 import com.cvtms.service.IncidentService;
 import com.cvtms.service.ReportingService;
 import com.cvtms.model.User;
+import com.cvtms.model.Vehicle;
+import com.cvtms.model.EntryLog;
+import com.cvtms.dao.VehicleDAO;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -19,6 +22,8 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 /**
  * Lightweight REST API server using Java's built-in HttpServer.
@@ -32,17 +37,20 @@ public class ApiServer {
     private TrafficService trafficService;
     private IncidentService incidentService;
     private ReportingService reportingService;
+    private VehicleDAO vehicleDAO;
 
     public ApiServer(int port) throws IOException {
         this.vehicleService = new VehicleService();
         this.trafficService = new TrafficService(vehicleService);
         this.incidentService = new IncidentService();
         this.reportingService = new ReportingService();
+        this.vehicleDAO = new VehicleDAO();
 
         server = HttpServer.create(new InetSocketAddress(port), 0);
 
         // Register endpoints
         server.createContext("/api/login", new LoginHandler());
+        server.createContext("/api/vehicles/inside", new VehiclesInsideHandler());
 
         server.setExecutor(null); // default executor
     }
@@ -181,6 +189,47 @@ public class ApiServer {
             } else {
                 sendJson(exchange, 401, "{\"success\":false,\"message\":\"Invalid username or password\"}");
             }
+        }
+    }
+
+    /**
+     * GET /api/vehicles/inside
+     * Returns the list of vehicles currently inside campus AND the count.
+     * Count is derived from the same list (single query) to guarantee consistency.
+     * Response: {"success":true, "count":N, "data":[{"regNumber":"...","entryTime":"...","gate":"...","type":"..."}]}
+     */
+    class VehiclesInsideHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (handlePreflight(exchange)) return;
+
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 405, "{\"success\":false,\"message\":\"Method not allowed\"}");
+                return;
+            }
+
+            List<EntryLog> inside = trafficService.viewVehiclesCurrentlyInside();
+
+            StringBuilder data = new StringBuilder("[");
+            for (int i = 0; i < inside.size(); i++) {
+                EntryLog log = inside.get(i);
+                Vehicle vehicle = vehicleDAO.findVehicleById(log.getVehicleId());
+                String regNumber = (vehicle != null) ? vehicle.getRegistrationNumber() : "ID-" + log.getVehicleId();
+                String type = (vehicle != null) ? vehicle.getType().name() : "UNKNOWN";
+                String entryTime = log.getEntryTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+
+                if (i > 0) data.append(",");
+                data.append("{")
+                    .append("\"regNumber\":\"").append(esc(regNumber)).append("\",")
+                    .append("\"entryTime\":\"").append(entryTime).append("\",")
+                    .append("\"gate\":\"").append(esc(log.getGate())).append("\",")
+                    .append("\"type\":\"").append(type).append("\"")
+                    .append("}");
+            }
+            data.append("]");
+
+            String json = "{\"success\":true,\"count\":" + inside.size() + ",\"data\":" + data.toString() + "}";
+            sendJson(exchange, 200, json);
         }
     }
 }
