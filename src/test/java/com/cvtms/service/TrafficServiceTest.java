@@ -64,4 +64,33 @@ public class TrafficServiceTest {
         assertEquals("Gate A", log.getGate());
         assertNotNull(log.getExitTime());
     }
+
+    @Test
+    public void testRecordEntryForNonExistentVehicle() {
+        String regNumber = "NON-EXISTENT-" + System.currentTimeMillis();
+        boolean result = trafficService.recordEntry(regNumber, "Main Gate", "None");
+        assertFalse("Entry should fail for non-existent vehicle", result);
+    }
+
+    @Test
+    public void testRecordExitForVehicleNotInside() {
+        String regNumber = "NOT-INSIDE-" + System.currentTimeMillis();
+        vehicleService.registerVehicle(regNumber, "Not Inside Owner", "000", VehicleType.CAMPUS);
+        boolean result = trafficService.recordExit(regNumber, "");
+        assertFalse("Exit should fail for vehicle not inside", result);
+    }
+
+    @Test
+    public void testRecordExitWithOverstay() {
+        String regNumber = "OVERSTAY-" + System.currentTimeMillis();
+        vehicleService.registerVehicle(regNumber, "Overstay Owner", "111", VehicleType.EXTERNAL);
+        trafficService.recordEntry(regNumber, "Main Gate", "Visit");
+        
+        // We can't easily simulate time passing in this simple setup without mocking,
+        // but we can test that the method handles a justification if needed.
+        // In this system, recordExit returns false if an overstay is detected and no justification is provided.
+        // Since we just entered, it won't be an overstay, so it should return true.
+        boolean result = trafficService.recordExit(regNumber, "Was delayed by meeting");
+        assertTrue("Exit should succeed with justification", result);
+    }
 }

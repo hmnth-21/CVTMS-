@@ -38,4 +38,16 @@ public class AuthServiceTest {
         assertTrue(loginResult);
         assertEquals(Role.SECURITY, authService.getCurrentUser().getRole());
     }
+
+    @Test
+    public void testLoginWithWrongPassword() {
+        boolean result = authService.login("admin", "wrong_password");
+        assertFalse("Login should fail with wrong password", result);
+    }
+
+    @Test
+    public void testLoginWithNonExistentUser() {
+        boolean result = authService.login("non_existent_user", "password");
+        assertFalse("Login should fail for non-existent user", result);
+    }
 }
