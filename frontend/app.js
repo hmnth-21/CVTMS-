@@ -309,6 +309,31 @@ document.querySelectorAll('form:not(#login-form)').forEach(form => {
                 showToast('Search completed.');
             }
             
+        } else if (form.id === 'register-security-form') {
+            const newUser = document.getElementById('new-sec-user').value.trim();
+            const newPass = document.getElementById('new-sec-pass').value.trim();
+
+            if (!newUser || !newPass) {
+                showToast('Please enter both username and password.', 'error');
+                return;
+            }
+
+            fetch(`${API_BASE}/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: newUser, password: newPass })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message || 'Security user registered.');
+                    form.reset();
+                } else {
+                    showToast(data.message || 'Registration failed.', 'error');
+                }
+            })
+            .catch(() => showToast('Cannot connect to server.', 'error'));
+
         } else {
             showToast('Action successful!');
             form.reset();

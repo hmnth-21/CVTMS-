@@ -11,6 +11,7 @@ import com.cvtms.service.VehicleService;
 import com.cvtms.service.IncidentService;
 import com.cvtms.service.ReportingService;
 import com.cvtms.model.User;
+import com.cvtms.model.Role;
 import com.cvtms.model.Vehicle;
 import com.cvtms.model.EntryLog;
 import com.cvtms.dao.VehicleDAO;
@@ -50,6 +51,7 @@ public class ApiServer {
 
         // Register endpoints
         server.createContext("/api/login", new LoginHandler());
+        server.createContext("/api/register", new RegisterHandler());
         server.createContext("/api/vehicles/inside", new VehiclesInsideHandler());
 
         server.setExecutor(null); // default executor
@@ -230,6 +232,45 @@ public class ApiServer {
 
             String json = "{\"success\":true,\"count\":" + inside.size() + ",\"data\":" + data.toString() + "}";
             sendJson(exchange, 200, json);
+        }
+    }
+
+    /**
+     * POST /api/register
+     * Body: {"username": "...", "password": "..."}
+     * Registers a new SECURITY user. Reuses AuthService.register() which
+     * handles BCrypt hashing, duplicate checking, and input normalization.
+     * Response: {"success": true, "message": "..."}
+     *       or: {"success": false, "message": "..."}
+     */
+    class RegisterHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (handlePreflight(exchange)) return;
+
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 405, "{\"success\":false,\"message\":\"Method not allowed\"}");
+                return;
+            }
+
+            String body = readBody(exchange);
+            String username = jsonValue(body, "username");
+            String password = jsonValue(body, "password");
+
+            if (username == null || password == null || username.trim().isEmpty() || password.trim().isEmpty()) {
+                sendJson(exchange, 400, "{\"success\":false,\"message\":\"Username and password are required\"}");
+                return;
+            }
+
+            // Reuse existing AuthService.register() — handles hashing + normalization
+            AuthService auth = new AuthService();
+            boolean success = auth.register(username, password, Role.SECURITY);
+
+            if (success) {
+                sendJson(exchange, 200, "{\"success\":true,\"message\":\"Security user registered successfully\"}");
+            } else {
+                sendJson(exchange, 400, "{\"success\":false,\"message\":\"Registration failed. Username may already exist.\"}");
+            }
         }
     }
 }
