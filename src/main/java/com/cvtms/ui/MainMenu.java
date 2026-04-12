@@ -39,6 +39,14 @@ public class MainMenu {
         System.out.println("=========================================");
         DatabaseConnectionManager.initializeDatabase();
 
+        // Start REST API server for frontend on a background thread
+        try {
+            com.cvtms.api.ApiServer apiServer = new com.cvtms.api.ApiServer(8080);
+            apiServer.start();
+        } catch (Exception e) {
+            System.err.println("[WARNING] API server could not start: " + e.getMessage());
+        }
+
         while (true) {
             if (!authService.isAuthenticated()) {
                 showLoginMenu();

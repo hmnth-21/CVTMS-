@@ -1,3 +1,6 @@
+// API Base URL — points to the Java backend HttpServer
+const API_BASE = 'http://localhost:8080/api';
+
 // Mock Database State
 let state = {
     currentlyInside: [
@@ -135,29 +138,47 @@ document.querySelectorAll('.nav-list a').forEach(link => {
     });
 });
 
-// Authentication Mock
-loginForm.addEventListener('submit', (e) => {
+// Authentication — calls backend API
+loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const user = usernameInput.value.trim().toLowerCase();
-    
-    if (user === 'admin' || user === 'security') {
-        loginView.classList.remove('active');
-        appView.classList.add('active');
-        currentUsernameSpan.textContent = usernameInput.value;
-        userRoleBadge.textContent = user;
-        
-        if (user === 'admin') {
-            adminNav.style.display = 'block';
-            securityNav.style.display = 'none';
-            switchView('admin-dashboard', 'Overview & Stats');
+    const user = usernameInput.value.trim();
+    const pass = passwordInput.value.trim();
+
+    if (!user || !pass) {
+        showToast('Please enter username and password.', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user, password: pass })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            loginView.classList.remove('active');
+            appView.classList.add('active');
+            currentUsernameSpan.textContent = data.username;
+            userRoleBadge.textContent = data.role;
+
+            if (data.role === 'ADMIN') {
+                adminNav.style.display = 'block';
+                securityNav.style.display = 'none';
+                switchView('admin-dashboard', 'Overview & Stats');
+            } else {
+                adminNav.style.display = 'none';
+                securityNav.style.display = 'block';
+                switchView('sec-dashboard', 'Operations');
+            }
+            showToast(`Welcome back, ${data.username}!`);
         } else {
-            adminNav.style.display = 'none';
-            securityNav.style.display = 'block';
-            switchView('sec-dashboard', 'Operations');
+            showToast(data.message || 'Login failed.', 'error');
         }
-        showToast(`Welcome back, ${user}!`);
-    } else {
-        showToast('Invalid credentials. Use "admin" or "security".', 'error');
+    } catch (err) {
+        showToast('Cannot connect to server. Is the backend running?', 'error');
     }
 });
 
