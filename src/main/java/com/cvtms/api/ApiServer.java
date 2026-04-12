@@ -53,6 +53,7 @@ public class ApiServer {
         server.createContext("/api/login", new LoginHandler());
         server.createContext("/api/register", new RegisterHandler());
         server.createContext("/api/vehicles/inside", new VehiclesInsideHandler());
+        server.createContext("/api/entry", new EntryHandler());
 
         server.setExecutor(null); // default executor
     }
@@ -270,6 +271,40 @@ public class ApiServer {
                 sendJson(exchange, 200, "{\"success\":true,\"message\":\"Security user registered successfully\"}");
             } else {
                 sendJson(exchange, 400, "{\"success\":false,\"message\":\"Registration failed. Username may already exist.\"}");
+            }
+        }
+    }
+
+    /**
+     * POST /api/entry
+     * Body: {"regNumber": "...", "gate": "...", "purpose": "..."}
+     */
+    class EntryHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (handlePreflight(exchange)) return;
+
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 405, "{\"success\":false,\"message\":\"Method not allowed\"}");
+                return;
+            }
+
+            String body = readBody(exchange);
+            String regNumber = jsonValue(body, "regNumber");
+            String gate = jsonValue(body, "gate");
+            String purpose = jsonValue(body, "purpose");
+
+            if (regNumber == null || gate == null || regNumber.trim().isEmpty() || gate.trim().isEmpty()) {
+                sendJson(exchange, 400, "{\"success\":false,\"message\":\"Registration number and gate are required\"}");
+                return;
+            }
+
+            boolean success = trafficService.recordEntry(regNumber.trim().toUpperCase(), gate.trim(), purpose != null ? purpose.trim() : "");
+            
+            if (success) {
+                sendJson(exchange, 200, "{\"success\":true,\"message\":\"Vehicle entry recorded.\"}");
+            } else {
+                sendJson(exchange, 400, "{\"success\":false,\"message\":\"Entry failed. Vehicle may not exist or is already inside.\"}");
             }
         }
     }

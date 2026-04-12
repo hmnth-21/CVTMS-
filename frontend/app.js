@@ -228,16 +228,27 @@ document.querySelectorAll('form:not(#login-form)').forEach(form => {
         
         if (form.id === 'record-entry-form') {
             const inputs = form.querySelectorAll('input, select');
-            const regNumber = inputs[0].value.toUpperCase();
+
+            const regNumber = inputs[0].value.toUpperCase().trim();
             const gate = inputs[1].value;
-            const timeStr = getCurrentTimeStr();
-            
-            state.currentlyInside.unshift({ id: regNumber, entryTime: timeStr, gate: gate, type: 'GUEST' });
-            state.movementHistory.unshift({ id: regNumber, entryTime: timeStr, gate: gate, exitTime: null, status: 'INSIDE' });
-            
-            showToast('Vehicle entry logged.');
-            form.reset();
-            renderTables();
+            const purpose = (inputs[2] && inputs[2].value) ? inputs[2].value : '';
+
+            fetch(`${API_BASE}/entry`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ regNumber, gate, purpose })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message || 'Vehicle entry logged.');
+                    form.reset();
+                    loadVehiclesInside(); // refresh data
+                } else {
+                    showToast(data.message || 'Entry failed.', 'error');
+                }
+            })
+            .catch(() => showToast('Cannot connect to server.', 'error'));
             
         } else if (form.id === 'record-exit-form') {
             const inputs = form.querySelectorAll('input');
