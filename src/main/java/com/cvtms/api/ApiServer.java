@@ -1,22 +1,5 @@
 package com.cvtms.api;
 
-import com.sun.net.httpserver.HttpServer;
-import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.Headers;
-
-import com.cvtms.service.AuthService;
-import com.cvtms.service.TrafficService;
-import com.cvtms.service.VehicleService;
-import com.cvtms.service.IncidentService;
-import com.cvtms.service.ReportingService;
-import com.cvtms.model.User;
-import com.cvtms.model.Role;
-import com.cvtms.model.Vehicle;
-import com.cvtms.model.VehicleType;
-import com.cvtms.model.EntryLog;
-import com.cvtms.dao.VehicleDAO;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -26,6 +9,22 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+
+import com.cvtms.dao.VehicleDAO;
+import com.cvtms.model.EntryLog;
+import com.cvtms.model.Role;
+import com.cvtms.model.User;
+import com.cvtms.model.Vehicle;
+import com.cvtms.model.VehicleType;
+import com.cvtms.service.AuthService;
+import com.cvtms.service.IncidentService;
+import com.cvtms.service.ReportingService;
+import com.cvtms.service.TrafficService;
+import com.cvtms.service.VehicleService;
+import com.sun.net.httpserver.Headers;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
 
 /**
  * Lightweight REST API server using Java's built-in HttpServer.
@@ -55,6 +54,7 @@ public class ApiServer {
         server.createContext("/api/register", new RegisterHandler());
         server.createContext("/api/vehicles/inside", new VehiclesInsideHandler());
         server.createContext("/api/entry", new EntryHandler());
+        server.createContext("/api/exit", new ExitHandler());
         server.createContext("/api/vehicle/register", new VehicleRegisterHandler());
 
         server.setExecutor(null); // default executor
@@ -307,6 +307,42 @@ public class ApiServer {
                 sendJson(exchange, 200, "{\"success\":true,\"message\":\"Vehicle entry recorded.\"}");
             } else {
                 sendJson(exchange, 400, "{\"success\":false,\"message\":\"Entry failed. Vehicle may not exist or is already inside.\"}");
+            }
+        }
+    }
+
+    /**
+     * POST /api/exit
+     * Body: {"regNumber": "...", "justification": "..."}
+     */
+    class ExitHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (handlePreflight(exchange)) return;
+
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 405, "{\"success\":false,\"message\":\"Method not allowed\"}");
+                return;
+            }
+
+            String body = readBody(exchange);
+            String regNumber = jsonValue(body, "regNumber");
+            String justification = jsonValue(body, "justification");
+
+            if (regNumber == null || regNumber.trim().isEmpty()) {
+                sendJson(exchange, 400, "{\"success\":false,\"message\":\"Registration number is required\"}");
+                return;
+            }
+
+            boolean success = trafficService.recordExit(
+                regNumber.trim().toUpperCase(),
+                justification != null ? justification.trim() : ""
+            );
+
+            if (success) {
+                sendJson(exchange, 200, "{\"success\":true,\"message\":\"Vehicle exit recorded.\"}");
+            } else {
+                sendJson(exchange, 400, "{\"success\":false,\"message\":\"Exit failed. Vehicle may not be inside, may not exist, or overstay justification is required.\"}");
             }
         }
     }

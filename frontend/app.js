@@ -252,24 +252,25 @@ document.querySelectorAll('form:not(#login-form)').forEach(form => {
             
         } else if (form.id === 'record-exit-form') {
             const inputs = form.querySelectorAll('input');
-            const regNumber = inputs[0].value.toUpperCase();
-            
-            const idx = state.currentlyInside.findIndex(v => v.id === regNumber);
-            if (idx !== -1) {
-                state.currentlyInside.splice(idx, 1);
-                
-                // Update history
-                const hist = state.movementHistory.find(v => v.id === regNumber && v.status === 'INSIDE');
-                if (hist) {
-                    hist.exitTime = getCurrentTimeStr();
-                    hist.status = 'LEFT';
+            const regNumber = inputs[0].value.toUpperCase().trim();
+            const justification = (inputs[1] && inputs[1].value) ? inputs[1].value.trim() : '';
+
+            fetch(`${API_BASE}/exit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ regNumber, justification })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message || 'Vehicle exit recorded.');
+                    form.reset();
+                    loadVehiclesInside(); // refresh list/count from DB-backed endpoint
+                } else {
+                    showToast(data.message || 'Exit failed.', 'error');
                 }
-                showToast(`Vehicle ${regNumber} exited successfully.`);
-            } else {
-                showToast(`Vehicle ${regNumber} is not currently inside!`, 'error');
-            }
-            form.reset();
-            renderTables();
+            })
+            .catch(() => showToast('Cannot connect to server.', 'error'));
             
         } else if (form.id === 'record-incident-form') {
             const inputs = form.querySelectorAll('input, select, textarea');
